@@ -3,13 +3,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 
 class AuthService extends ChangeNotifier {
-  // ─── Client IDs par plateforme ────────────────────────────────────────────
-  // Remplace chaque valeur après avoir créé les identifiants sur :
-  // https://console.cloud.google.com → API & Services → Identifiants
   static const String _webClientId =
       '77548941980-2qb736cep0b6sppff094nkuuaaocivu3.apps.googleusercontent.com';
-  static const String _androidClientId =
-      'REMPLACE_ANDROID_CLIENT_ID.apps.googleusercontent.com';
   static const String _iosClientId =
       '77548941980-gshf15fetpo1su6t5ifnm4ku2h3s8kpm.apps.googleusercontent.com';
 
@@ -24,16 +19,13 @@ class AuthService extends ChangeNotifier {
         ],
       );
     }
-    // Sur iOS/Android, le clientId n'est pas nécessaire ici car il est
-    // lu depuis GoogleService-Info.plist (iOS) et google-services.json (Android)
-    // Mais on peut le passer explicitement si besoin
     return GoogleSignIn(
+      clientId: _iosClientId,
       scopes: [
         'email',
         'profile',
         drive.DriveApi.driveFileScope,
       ],
-      // Nécessaire sur Android pour accéder aux tokens Drive
       serverClientId: _webClientId,
     );
   }
