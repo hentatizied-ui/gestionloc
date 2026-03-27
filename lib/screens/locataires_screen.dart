@@ -1,6 +1,9 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:printing/printing.dart';
+import '../services/pdf_service.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../services/data_service.dart';
@@ -339,130 +342,44 @@ class _QuittanceSheet extends StatelessWidget {
   final Transaction paiement;
   const _QuittanceSheet({required this.loc, required this.bien, required this.mois, required this.paiement});
 
-  String _genererTexte(String proprietaire) {
-    final moisStr = DateFormat('MMMM yyyy', 'fr_FR').format(mois);
-    final loyer = bien?.loyerMensuel ?? 0;
-    final charges = bien?.charges ?? 0;
-    final total = loyer + charges;
-    final adresse = bien != null ? '${bien!.adresse}, ${bien!.ville} ${bien!.codePostal}' : '';
+  String _capitalize(String s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
 
-    return '''QUITTANCE DE LOYER
-
-Période : ${_capitalize(moisStr)}
-Date d\'émission : ${DateFormat('dd/MM/yyyy').format(DateTime.now())}
-
-─────────────────────────────
-BAILLEUR
-$proprietaire
-
-LOCATAIRE
-${loc.nomComplet}
-${loc.email} | ${loc.telephone}
-
-BIEN LOUÉ
-${bien?.nom ?? ''}
-$adresse
-
-─────────────────────────────
-DTAIL DU PAIEMENT
-Loyer : ${_fmt(loyer)}
-Charges : ${_fmt(charges)}
-TOTAL : ${_fmt(total)}
-
-Reçu le : ${DateFormat('dd/MM/yyyy').format(paiement.date)}
-─────────────────────────────
-
-Je soussigné $proprietaire, bailleur,
-déclare avoir reçu de ${loc.nomComplet}
-la somme de ${_fmt(total)} au titre du loyer
-et des charges pour la période de ${_capitalize(moisStr)}.
-
-Cette quittance annule tous les reçus antérieurs.''';
+  Future<Uint8List?> _getPdfBytes(BuildContext context) async {
+    if (bien == null) return null;
+    try {
+      return await PdfService.genererQuittance(
+        locataire: loc,
+        bien: bien!,
+        paiement: paiement,
+        mois: mois,
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur PDF: $e'), backgroundColor: AppTheme.danger),
+        );
+      }
+      return null;
+    }
   }
 
-  String _capitalize(String s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
-  String _fmt(double v) => NumberFormat.currency(locale: 'fr_FR', symbol: '€', decimalDigits: 0).format(v);
+  void _afficherPdf(BuildContext context) async {
+    final bytes = await _getPdfBytes(context);
+    if (bytes == null || !context.mounted) return;
+    final moisStr = DateFormat('MMMM_yyyy', 'fr_FR').format(mois);
+    await Printing.layoutPdf(
+      onLayout: (_) => bytes,
+      name: 'Quittance_${loc.nom}_$moisStr.pdf',
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final userService = context.read<UserService>();
-    final proprietaire = userService.displayName.isNotEmpty ? userService.displayName : 'Le propriétaire';
-    final texte = _genererTexte(proprietaire);
-    final moisStr = _capitalize(DateFormat('MMMM yyyy', 'fr_FR').format(mois));
-    final sujet = Uri.encodeComponent('Quittance de loyer - $moisStr');
-    final corps = Uri.encodeComponent(texte);
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.85,
-      expand: false,
-      builder: (_, ctrl) => ListView(
-        controller: ctrl,
-        padding: const EdgeInsets.all(20),
-        children: [
-          Center(child: Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
-          Row(children: [
-            const Icon(Icons.receipt_long, color: AppTheme.primary),
-            const SizedBox(width: 8),
-            Text('Quittance - $moisStr', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-          ]),
-          const SizedBox(height: 16),
-
-          // Aperçu quittance
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[200]!),
-            ),
-            child: Text(texte, style: const TextStyle(fontSize: 12, height: 1.6, fontFamily: 'monospace')),
-          ),
-          const SizedBox(height: 20),
-
-          // Boutons partage
-          const Text('Envoyer la quittance :', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
-          const SizedBox(height: 12),
-
-          // Email
-          _PartageBtn(
-            icon: Icons.email_outlined,
-            label: 'Envoyer par Email',
-            color: AppTheme.blue,
-            onTap: () {
-              final url = 'mailto:${loc.email}?subject=$sujet&body=$corps';
-              _ouvrirUrl(context, url);
-            },
-          ),
-          const SizedBox(height: 10),
-
-          // WhatsApp
-          _PartageBtn(
-            icon: Icons.chat_outlined,
-            label: 'Envoyer par WhatsApp',
-            color: const Color(0xFF25D366),
-            onTap: () {
-              final phone = loc.telephone.replaceAll(RegExp(r'[^0-9]'), '');
-              final url = 'https://wa.me/$phone?text=$corps';
-              _ouvrirUrl(context, url);
-            },
-          ),
-          const SizedBox(height: 10),
-
-          // Copier texte
-          _PartageBtn(
-            icon: Icons.copy,
-            label: 'Copier le texte',
-            color: Colors.grey[700]!,
-            onTap: () async {
-              // Sur web, on utilise une approche différente
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Texte copié !'), backgroundColor: AppTheme.primary),
-              );
-            },
-          ),
-        ],
-      ),
+  void _partagerPdf(BuildContext context) async {
+    final bytes = await _getPdfBytes(context);
+    if (bytes == null || !context.mounted) return;
+    final moisStr = DateFormat('MMMM_yyyy', 'fr_FR').format(mois);
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: 'Quittance_${loc.nom}_$moisStr.pdf',
     );
   }
 
@@ -483,8 +400,73 @@ Cette quittance annule tous les reçus antérieurs.''';
       }
     }
   }
-  
+
+  @override
+  Widget build(BuildContext context) {
+    final moisStr = _capitalize(DateFormat('MMMM yyyy', 'fr_FR').format(mois));
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      expand: false,
+      builder: (_, ctrl) => ListView(
+        controller: ctrl,
+        padding: const EdgeInsets.all(20),
+        children: [
+          Center(child: Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
+          Row(children: [
+            const Icon(Icons.receipt_long, color: AppTheme.primary),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Quittance - $moisStr', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500))),
+          ]),
+          const SizedBox(height: 20),
+
+          // PDF actions
+          const Text('Actions :', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+          const SizedBox(height: 12),
+
+          _PartageBtn(
+            icon: Icons.picture_as_pdf,
+            label: 'Voir / Imprimer le PDF',
+            color: AppTheme.danger,
+            onTap: () => _afficherPdf(context),
+          ),
+          const SizedBox(height: 10),
+          _PartageBtn(
+            icon: Icons.share,
+            label: 'Partager le PDF',
+            color: AppTheme.primary,
+            onTap: () => _partagerPdf(context),
+          ),
+          const SizedBox(height: 10),
+          _PartageBtn(
+            icon: Icons.email_outlined,
+            label: 'Envoyer par Email',
+            color: AppTheme.blue,
+            onTap: () {
+              final sujet = Uri.encodeComponent('Quittance de loyer - $moisStr');
+              final url = 'mailto:${loc.email}?subject=$sujet';
+              _ouvrirUrl(context, url);
+            },
+          ),
+          const SizedBox(height: 10),
+          _PartageBtn(
+            icon: Icons.chat_outlined,
+            label: 'Envoyer par WhatsApp',
+            color: const Color(0xFF25D366),
+            onTap: () {
+              final phone = loc.telephone.replaceAll(RegExp(r'[^0-9]'), '');
+              final url = 'https://wa.me/$phone';
+              _ouvrirUrl(context, url);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
 }
+
 
 class _PartageBtn extends StatelessWidget {
   final IconData icon;
