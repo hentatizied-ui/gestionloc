@@ -7,7 +7,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
-    <string>Gestion Locative</string>
+    <string>gestionlocative</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>gestionloc</string>
+    <string>gestionlocative</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -29,9 +29,14 @@
     <key>LSApplicationQueriesSchemes</key>
     <array>
         <string>mailto</string>
+        <string>whatsapp</string>
         <string>https</string>
         <string>http</string>
     </array>
+    <key>UIFileSharingEnabled</key>
+    <true/>
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <true/>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
@@ -72,19 +77,5 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
-
-    <!-- Google Sign-In : REVERSED_CLIENT_ID du client iOS -->
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleTypeRole</key>
-            <string>Editor</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>com.googleusercontent.apps.77548941980-gshf15fetpo1su6t5ifnm4ku2h3s8kpm</string>
-            </array>
-        </dict>
-    </array>
-
 </dict>
 </plist>
