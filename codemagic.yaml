@@ -1,32 +1,22 @@
 workflows:
-  ios-no-sign:
-    name: iOS Build (no signing)
-    max_build_duration: 60
+  ios-build:
+    name: iOS Build
+    instance_type: mac_mini_m2
     environment:
       flutter: stable
-      xcode: latest
-      cocoapods: default
-
     scripts:
-      - name: Get Flutter packages
+      - name: Clean
+        script: |
+          flutter clean
+          rm -rf ios/Pods
+          rm -rf ios/Podfile.lock
+      - name: Get packages
         script: flutter pub get
-
-      - name: Pod install
+      - name: Install pods
         script: |
           cd ios
-          pod repo update
-          pod install
-
-      - name: Build iOS no-codesign
-        script: |
-          flutter build ios --release --no-codesign
-
-      - name: Package Runner.app.zip
-        script: |
-          cd build/ios/iphoneos
-          mkdir -p Payload
-          cp -r Runner.app Payload/
-          zip -r Runner.app.zip Payload/
-
+          pod install --repo-update
+      - name: Build
+        script: flutter build ios --release --no-codesign --verbose
     artifacts:
-      - build/ios/iphoneos/Runner.app.zip
+      - build/ios/iphoneos/Runner.app
