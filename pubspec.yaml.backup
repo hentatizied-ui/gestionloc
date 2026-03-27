@@ -1,5 +1,5 @@
-name: gestionloc
-description: Application de gestion locative
+name: gestionlocative
+description: Application de gestion locative avec Google Drive
 publish_to: 'none'
 version: 1.0.0+1
 
