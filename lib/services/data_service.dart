@@ -1,13 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
-import 'drive_service.dart';
+import 'sheets_service.dart';
 
 const _uuid = Uuid();
 
 class DataService extends ChangeNotifier {
-  DriveService? _drive;
+  SheetsService? _sheets;
 
+  List<Immeuble> _immeubles = [];
   List<Bien> _biens = [];
   List<Locataire> _locataires = [];
   List<Transaction> _transactions = [];
@@ -16,6 +17,7 @@ class DataService extends ChangeNotifier {
   bool _loading = false;
   String? _error;
 
+  List<Immeuble> get immeubles => List.unmodifiable(_immeubles);
   List<Bien> get biens => List.unmodifiable(_biens);
   List<Locataire> get locataires => List.unmodifiable(_locataires);
   List<Transaction> get transactions => List.unmodifiable(_transactions);
@@ -62,14 +64,10 @@ class DataService extends ChangeNotifier {
   double get montantEnAttente {
     return _locataires
         .where((l) => l.statut != StatutPaiement.aJour)
-        .map((l) {
-          final bien = getBienById(l.bienId);
-          return bien?.loyerMensuel ?? 0.0;
-        })
+        .map((l) { final bien = getBienById(l.bienId); return bien?.loyerMensuel ?? 0.0; })
         .fold(0.0, (a, b) => a + b);
   }
 
-  /// Revenus par mois pour l'année courante (liste de 12 valeurs)
   List<double> get revenusParMois {
     final now = DateTime.now();
     final result = List<double>.filled(12, 0);
@@ -83,14 +81,23 @@ class DataService extends ChangeNotifier {
 
   // ── Helpers ────────────────────────────────────────────────────────────
 
+  Immeuble? getImmeubleById(String? id) =>
+      id == null || id.isEmpty ? null : _immeubles.cast<Immeuble?>().firstWhere((i) => i?.id == id, orElse: () => null);
+
   Bien? getBienById(String? id) =>
-      id == null ? null : _biens.cast<Bien?>().firstWhere((b) => b?.id == id, orElse: () => null);
+      id == null || id.isEmpty ? null : _biens.cast<Bien?>().firstWhere((b) => b?.id == id, orElse: () => null);
 
   Locataire? getLocataireById(String? id) =>
-      id == null ? null : _locataires.cast<Locataire?>().firstWhere((l) => l?.id == id, orElse: () => null);
+      id == null || id.isEmpty ? null : _locataires.cast<Locataire?>().firstWhere((l) => l?.id == id, orElse: () => null);
 
   Locataire? getLocataireDuBien(String bienId) =>
       _locataires.cast<Locataire?>().firstWhere((l) => l?.bienId == bienId, orElse: () => null);
+
+  List<Bien> getBiensDeLImmeuble(String immeubleId) =>
+      _biens.where((b) => b.immeubleId == immeubleId).toList();
+
+  List<Bien> get biensSansImmeuble =>
+      _biens.where((b) => b.immeubleId == null || b.immeubleId!.isEmpty).toList();
 
   List<Transaction> getTransactionsDuBien(String bienId) =>
       _transactions.where((t) => t.bienId == bienId).toList()
@@ -102,27 +109,30 @@ class DataService extends ChangeNotifier {
 
   // ── Init ───────────────────────────────────────────────────────────────
 
-  void updateDrive(DriveService drive) {
-    _drive = drive;
-    if (drive.isReady) loadAll();
+  void updateSheets(SheetsService sheets) {
+    _sheets = sheets;
+    if (sheets.isReady) loadAll();
   }
 
   Future<void> loadAll() async {
-    if (_drive == null || !_drive!.isReady) return;
+    if (_sheets == null || !_sheets!.isReady) return;
     _loading = true;
     _error = null;
     notifyListeners();
     try {
       final results = await Future.wait([
-        _drive!.readJson('biens.json'),
-        _drive!.readJson('locataires.json'),
-        _drive!.readJson('transactions.json'),
-        _drive!.readJson('tickets.json'),
+        _sheets!.readSheetAsMap('Immeubles'),
+        _sheets!.readSheetAsMap('Biens'),
+        _sheets!.readSheetAsMap('Locataires'),
+        _sheets!.readSheetAsMap('Transactions'),
+        _sheets!.readSheetAsMap('Tickets'),
       ]);
-      _biens = results[0].map(Bien.fromJson).toList();
-      _locataires = results[1].map(Locataire.fromJson).toList();
-      _transactions = results[2].map(Transaction.fromJson).toList();
-      _tickets = results[3].map(Ticket.fromJson).toList();
+      _immeubles = results[0].map(Immeuble.fromMap).toList();
+      _biens = results[1].map(Bien.fromMap).toList();
+      _locataires = results[2].map(Locataire.fromMap).toList();
+      _transactions = results[3].map(Transaction.fromMap).toList();
+      _tickets = results[4].map(Ticket.fromMap).toList();
+      _transactions.sort((a, b) => b.date.compareTo(a.date));
     } catch (e) {
       _error = 'Erreur de chargement : $e';
     }
@@ -130,88 +140,103 @@ class DataService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── IMMEUBLES ──────────────────────────────────────────────────────────
+
+  Future<void> ajouterImmeuble(Immeuble immeuble) async {
+    _immeubles.add(immeuble);
+    await _sheets?.appendRow('Immeubles', immeuble.toRow());
+    notifyListeners();
+  }
+
+  Future<void> modifierImmeuble(Immeuble immeuble) async {
+    final i = _immeubles.indexWhere((b) => b.id == immeuble.id);
+    if (i >= 0) _immeubles[i] = immeuble;
+    await _sheets?.updateRow('Immeubles', immeuble.id, immeuble.toRow());
+    notifyListeners();
+  }
+
+  Future<void> supprimerImmeuble(String id) async {
+    _immeubles.removeWhere((b) => b.id == id);
+    await _sheets?.deleteRow('Immeubles', id);
+    notifyListeners();
+  }
+
   // ── BIENS ──────────────────────────────────────────────────────────────
 
   Future<void> ajouterBien(Bien bien) async {
     _biens.add(bien);
-    await _saveBiens();
+    await _sheets?.appendRow('Biens', bien.toRow());
     notifyListeners();
   }
 
   Future<void> modifierBien(Bien bien) async {
     final i = _biens.indexWhere((b) => b.id == bien.id);
     if (i >= 0) _biens[i] = bien;
-    await _saveBiens();
+    await _sheets?.updateRow('Biens', bien.id, bien.toRow());
     notifyListeners();
   }
 
   Future<void> supprimerBien(String id) async {
     _biens.removeWhere((b) => b.id == id);
-    await _saveBiens();
+    await _sheets?.deleteRow('Biens', id);
     notifyListeners();
   }
-
-  Future<void> _saveBiens() async =>
-      _drive?.writeJson('biens.json', _biens.map((b) => b.toJson()).toList());
 
   // ── LOCATAIRES ─────────────────────────────────────────────────────────
 
   Future<void> ajouterLocataire(Locataire loc) async {
     _locataires.add(loc);
-    if (loc.bienId != null) {
+    if (loc.bienId != null && loc.bienId!.isNotEmpty) {
       final i = _biens.indexWhere((b) => b.id == loc.bienId);
-      if (i >= 0) _biens[i] = _biens[i].copyWith(estLoue: true, locataireId: loc.id);
-      await _saveBiens();
+      if (i >= 0) {
+        _biens[i] = _biens[i].copyWith(estLoue: true, locataireId: loc.id);
+        await _sheets?.updateRow('Biens', _biens[i].id, _biens[i].toRow());
+      }
     }
-    await _saveLocataires();
+    await _sheets?.appendRow('Locataires', loc.toRow());
     notifyListeners();
   }
 
   Future<void> modifierLocataire(Locataire loc) async {
     final i = _locataires.indexWhere((l) => l.id == loc.id);
     if (i >= 0) _locataires[i] = loc;
-    await _saveLocataires();
+    await _sheets?.updateRow('Locataires', loc.id, loc.toRow());
     notifyListeners();
   }
 
   Future<void> supprimerLocataire(String id) async {
     final loc = _locataires.firstWhere((l) => l.id == id);
-    if (loc.bienId != null) {
+    if (loc.bienId != null && loc.bienId!.isNotEmpty) {
       final i = _biens.indexWhere((b) => b.id == loc.bienId);
-      if (i >= 0) _biens[i] = _biens[i].copyWith(estLoue: false, locataireId: null);
-      await _saveBiens();
+      if (i >= 0) {
+        _biens[i] = _biens[i].copyWith(estLoue: false, locataireId: '');
+        await _sheets?.updateRow('Biens', _biens[i].id, _biens[i].toRow());
+      }
     }
     _locataires.removeWhere((l) => l.id == id);
-    await _saveLocataires();
+    await _sheets?.deleteRow('Locataires', id);
     notifyListeners();
   }
-
-  Future<void> _saveLocataires() async =>
-      _drive?.writeJson('locataires.json', _locataires.map((l) => l.toJson()).toList());
 
   // ── TRANSACTIONS ───────────────────────────────────────────────────────
 
   Future<void> ajouterTransaction(Transaction tx) async {
-    _transactions.add(tx);
-    _transactions.sort((a, b) => b.date.compareTo(a.date));
-    await _saveTransactions();
+    _transactions.insert(0, tx);
+    await _sheets?.appendRow('Transactions', tx.toRow());
     notifyListeners();
   }
 
   Future<void> supprimerTransaction(String id) async {
     _transactions.removeWhere((t) => t.id == id);
-    await _saveTransactions();
+    await _sheets?.deleteRow('Transactions', id);
     notifyListeners();
   }
-
-  Future<void> _saveTransactions() async =>
-      _drive?.writeJson('transactions.json', _transactions.map((t) => t.toJson()).toList());
 
   // ── TICKETS ────────────────────────────────────────────────────────────
 
   Future<void> ajouterTicket(Ticket ticket) async {
     _tickets.add(ticket);
-    await _saveTickets();
+    await _sheets?.appendRow('Tickets', ticket.toRow());
     notifyListeners();
   }
 
@@ -219,60 +244,32 @@ class DataService extends ChangeNotifier {
     final i = _tickets.indexWhere((t) => t.id == id);
     if (i >= 0) {
       _tickets[i].statut = statut;
-      if (statut == StatutTicket.resolu) {
-        _tickets[i].dateResolution = DateTime.now();
-      }
+      if (statut == StatutTicket.resolu) _tickets[i].dateResolution = DateTime.now();
+      await _sheets?.updateRow('Tickets', id, _tickets[i].toRow());
     }
-    await _saveTickets();
     notifyListeners();
   }
 
   Future<void> supprimerTicket(String id) async {
     _tickets.removeWhere((t) => t.id == id);
-    await _saveTickets();
+    await _sheets?.deleteRow('Tickets', id);
     notifyListeners();
   }
 
-  Future<void> _saveTickets() async =>
-      _drive?.writeJson('tickets.json', _tickets.map((t) => t.toJson()).toList());
+  // ── Factories ──────────────────────────────────────────────────────────
 
-  // ── Factory helpers ────────────────────────────────────────────────────
+  Immeuble nouvImmeuble({required String nom, required String adresse, required String ville, required String codePostal, required int nbEtages}) =>
+      Immeuble(id: 'imm_${_uuid.v4().substring(0, 8)}', nom: nom, adresse: adresse, ville: ville, codePostal: codePostal, nbEtages: nbEtages);
 
-  Bien nouvBien({
-    required String nom, required String adresse, required String ville,
-    required String type, required int pieces, required double surface,
-    required double loyer, required double charges,
-  }) => Bien(
-    id: _uuid.v4(), nom: nom, adresse: adresse, ville: ville,
-    type: type, pieces: pieces, surface: surface,
-    loyerMensuel: loyer, charges: charges,
-  );
+  Bien nouvBien({required String nom, required String adresse, required String ville, required String codePostal, required String type, required int pieces, required double surface, required double loyer, required double charges, String? immeubleId, String? etage, String? numero}) =>
+      Bien(id: 'bien_${_uuid.v4().substring(0, 8)}', nom: nom, adresse: adresse, ville: ville, codePostal: codePostal, type: type, pieces: pieces, surface: surface, loyerMensuel: loyer, charges: charges, immeubleId: immeubleId, etage: etage, numero: numero);
 
-  Locataire nouvLocataire({
-    required String prenom, required String nom, required String email,
-    required String telephone, String? bienId,
-    required DateTime debutBail, required DateTime finBail, required double depot,
-  }) => Locataire(
-    id: _uuid.v4(), prenom: prenom, nom: nom, email: email,
-    telephone: telephone, bienId: bienId,
-    debutBail: debutBail, finBail: finBail, depot: depot,
-  );
+  Locataire nouvLocataire({required String prenom, required String nom, required String email, required String telephone, String? bienId, required DateTime debutBail, required DateTime finBail, required double depot}) =>
+      Locataire(id: 'loc_${_uuid.v4().substring(0, 8)}', prenom: prenom, nom: nom, email: email, telephone: telephone, bienId: bienId, debutBail: debutBail, finBail: finBail, depot: depot);
 
-  Transaction nouvTransaction({
-    required String label, required double montant,
-    required TypeTransaction type, DateTime? date,
-    String? bienId, String? locataireId, String? note,
-  }) => Transaction(
-    id: _uuid.v4(), label: label, montant: montant, type: type,
-    date: date ?? DateTime.now(),
-    bienId: bienId, locataireId: locataireId, note: note,
-  );
+  Transaction nouvTransaction({required String label, required double montant, required TypeTransaction type, DateTime? date, String? bienId, String? immeubleId, String? locataireId, String? note}) =>
+      Transaction(id: 'tx_${_uuid.v4().substring(0, 8)}', label: label, montant: montant, type: type, date: date ?? DateTime.now(), bienId: bienId, immeubleId: immeubleId, locataireId: locataireId, note: note);
 
-  Ticket nouvTicket({
-    required String titre, required String description,
-    required String bienId, required PrioriteTicket priorite, String? rapportePar,
-  }) => Ticket(
-    id: _uuid.v4(), titre: titre, description: description,
-    bienId: bienId, priorite: priorite, rapportePar: rapportePar,
-  );
+  Ticket nouvTicket({required String titre, required String description, required String bienId, String? immeubleId, required PrioriteTicket priorite, String? rapportePar}) =>
+      Ticket(id: 'tkt_${_uuid.v4().substring(0, 8)}', titre: titre, description: description, bienId: bienId, immeubleId: immeubleId, priorite: priorite, rapportePar: rapportePar);
 }

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'services/auth_service.dart';
-import 'services/drive_service.dart';
+import 'services/sheets_service.dart';
 import 'services/data_service.dart';
 import 'screens/splash_screen.dart';
-import 'package:intl/date_symbol_data_local.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,13 +20,13 @@ class GestionLocativeApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
-        ChangeNotifierProxyProvider<AuthService, DriveService>(
-          create: (_) => DriveService(),
-          update: (_, auth, drive) => drive!..updateAuth(auth),
+        ChangeNotifierProxyProvider<AuthService, SheetsService>(
+          create: (_) => SheetsService(),
+          update: (_, auth, sheets) => sheets!..updateAuth(auth),
         ),
-        ChangeNotifierProxyProvider<DriveService, DataService>(
+        ChangeNotifierProxyProvider<SheetsService, DataService>(
           create: (_) => DataService(),
-          update: (_, drive, data) => data!..updateDrive(drive),
+          update: (_, sheets, data) => data!..updateSheets(sheets),
         ),
       ],
       child: MaterialApp(
@@ -52,20 +52,13 @@ class AppTheme {
   static ThemeData light() {
     return ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: primary,
-        brightness: Brightness.light,
-      ),
+      colorScheme: ColorScheme.fromSeed(seedColor: primary, brightness: Brightness.light),
       scaffoldBackgroundColor: const Color(0xFFF8F9FA),
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0.5,
-        titleTextStyle: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.w500,
-          color: Color(0xFF1A1A1A),
-        ),
+        titleTextStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: Color(0xFF1A1A1A)),
         iconTheme: IconThemeData(color: Color(0xFF1A1A1A)),
       ),
       cardTheme: CardThemeData(
@@ -89,10 +82,7 @@ class AppTheme {
   static ThemeData dark() {
     return ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: primary,
-        brightness: Brightness.dark,
-      ),
+      colorScheme: ColorScheme.fromSeed(seedColor: primary, brightness: Brightness.dark),
       scaffoldBackgroundColor: const Color(0xFF121212),
     );
   }
