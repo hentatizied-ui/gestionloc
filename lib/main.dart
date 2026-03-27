@@ -4,9 +4,11 @@ import 'services/auth_service.dart';
 import 'services/drive_service.dart';
 import 'services/data_service.dart';
 import 'screens/splash_screen.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('fr_FR', null);
   runApp(const GestionLocativeApp());
 }
 
