@@ -1,0 +1,36 @@
+workflows:
+  ios-development:
+    name: iOS Development Build
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+
+      - name: Install CocoaPods
+        script: |
+          cd ios && pod install
+
+      - name: Build iOS (no codesign)
+        script: |
+          flutter build ios --release --no-codesign
+
+      - name: Create Runner.app zip
+        script: |
+          cd build/ios/iphoneos
+          mkdir -p Payload
+          cp -r Runner.app Payload/
+          zip -r Runner.app.zip Payload
+
+    artifacts:
+      - build/ios/iphoneos/Runner.app.zip
+      - build/ios/iphoneos/Runner.app
+
+    publishing:
+      email:
+        recipients:
+          - hentati.zied@hotmail.com
