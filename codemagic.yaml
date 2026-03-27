@@ -6,6 +6,9 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
+      ios_signing:
+        distribution_type: ad_hoc
+        bundle_identifier: com.hentatizied.gestionLocative
 
     scripts:
       - name: Get Flutter packages
@@ -30,3 +33,4 @@ workflows:
 
     artifacts:
       - build/ios/iphoneos/Runner.app.zip
+      - build/ios/iphoneos/Runner.app
