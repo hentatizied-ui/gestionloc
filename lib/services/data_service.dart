@@ -103,6 +103,10 @@ class DataService extends ChangeNotifier {
       _transactions.where((t) => t.bienId == bienId).toList()
         ..sort((a, b) => b.date.compareTo(a.date));
 
+  List<Transaction> getLoyers(String bienId) =>
+      _transactions.where((t) => t.bienId == bienId && t.type == TypeTransaction.loyer && t.isRecette).toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+
   List<Ticket> getTicketsDuBien(String bienId) =>
       _tickets.where((t) => t.bienId == bienId).toList()
         ..sort((a, b) => b.dateCreation.compareTo(a.dateCreation));
@@ -187,19 +191,33 @@ class DataService extends ChangeNotifier {
   Future<void> ajouterLocataire(Locataire loc) async {
     _locataires.add(loc);
     if (loc.bienId != null && loc.bienId!.isNotEmpty) {
-      final i = _biens.indexWhere((b) => b.id == loc.bienId);
-      if (i >= 0) {
-        _biens[i] = _biens[i].copyWith(estLoue: true, locataireId: loc.id);
-        await _sheets?.updateRow('Biens', _biens[i].id, _biens[i].toRow());
-      }
+      await _setBienLoue(loc.bienId!, true, loc.id);
     }
     await _sheets?.appendRow('Locataires', loc.toRow());
     notifyListeners();
   }
 
   Future<void> modifierLocataire(Locataire loc) async {
+    final ancienLoc = _locataires.firstWhere((l) => l.id == loc.id);
+    final ancienBienId = ancienLoc.bienId;
+    final nouveauBienId = loc.bienId;
+
+    // Mettre à jour le locataire en local
     final i = _locataires.indexWhere((l) => l.id == loc.id);
     if (i >= 0) _locataires[i] = loc;
+
+    // Si le bien a changé
+    if (ancienBienId != nouveauBienId) {
+      // Libérer l'ancien bien
+      if (ancienBienId != null && ancienBienId.isNotEmpty) {
+        await _setBienLoue(ancienBienId, false, '');
+      }
+      // Occuper le nouveau bien
+      if (nouveauBienId != null && nouveauBienId.isNotEmpty) {
+        await _setBienLoue(nouveauBienId, true, loc.id);
+      }
+    }
+
     await _sheets?.updateRow('Locataires', loc.id, loc.toRow());
     notifyListeners();
   }
@@ -207,15 +225,19 @@ class DataService extends ChangeNotifier {
   Future<void> supprimerLocataire(String id) async {
     final loc = _locataires.firstWhere((l) => l.id == id);
     if (loc.bienId != null && loc.bienId!.isNotEmpty) {
-      final i = _biens.indexWhere((b) => b.id == loc.bienId);
-      if (i >= 0) {
-        _biens[i] = _biens[i].copyWith(estLoue: false, locataireId: '');
-        await _sheets?.updateRow('Biens', _biens[i].id, _biens[i].toRow());
-      }
+      await _setBienLoue(loc.bienId!, false, '');
     }
     _locataires.removeWhere((l) => l.id == id);
     await _sheets?.deleteRow('Locataires', id);
     notifyListeners();
+  }
+
+  Future<void> _setBienLoue(String bienId, bool estLoue, String locataireId) async {
+    final i = _biens.indexWhere((b) => b.id == bienId);
+    if (i >= 0) {
+      _biens[i] = _biens[i].copyWith(estLoue: estLoue, locataireId: locataireId);
+      await _sheets?.updateRow('Biens', _biens[i].id, _biens[i].toRow());
+    }
   }
 
   // ── TRANSACTIONS ───────────────────────────────────────────────────────

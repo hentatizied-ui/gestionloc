@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'services/auth_service.dart';
+import 'services/user_service.dart';
 import 'services/sheets_service.dart';
 import 'services/data_service.dart';
 import 'screens/splash_screen.dart';
@@ -19,11 +19,8 @@ class GestionLocativeApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthService()),
-        ChangeNotifierProxyProvider<AuthService, SheetsService>(
-          create: (_) => SheetsService(),
-          update: (_, auth, sheets) => sheets!..updateAuth(auth),
-        ),
+        ChangeNotifierProvider(create: (_) => UserService()),
+        ChangeNotifierProvider(create: (_) => SheetsService()),
         ChangeNotifierProxyProvider<SheetsService, DataService>(
           create: (_) => DataService(),
           update: (_, sheets, data) => data!..updateSheets(sheets),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/auth_service.dart';
-import '../services/data_service.dart';
+import '../services/user_service.dart';
 import 'home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -18,22 +17,23 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _check() async {
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
-    final auth = context.read<AuthService>();
-    if (auth.isSignedIn) {
+    final user = context.read<UserService>();
+    if (user.isConfigured) {
       _goHome();
     } else {
-      // Attendre que le service finisse de vérifier la session silencieuse
-      auth.addListener(_onAuthChanged);
+      user.addListener(_onUserReady);
     }
   }
 
-  void _onAuthChanged() {
-    final auth = context.read<AuthService>();
-    if (!auth.isLoading) {
-      auth.removeListener(_onAuthChanged);
-      if (auth.isSignedIn && mounted) _goHome();
+  void _onUserReady() {
+    final user = context.read<UserService>();
+    if (user.isReady) {
+      user.removeListener(_onUserReady);
+      if (user.isConfigured && mounted) {
+        _goHome();
+      }
     }
   }
 
@@ -46,101 +46,103 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthService>();
-    if (auth.isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+    final user = context.watch<UserService>();
+    if (!user.isReady) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    return const LoginScreen();
+    if (!user.isConfigured) {
+      return const WelcomeScreen();
+    }
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
 
-class LoginScreen extends StatelessWidget {
-  const LoginScreen({super.key});
+// ─── Écran de bienvenue ────────────────────────────────────────────────────
+
+class WelcomeScreen extends StatefulWidget {
+  const WelcomeScreen({super.key});
+  @override
+  State<WelcomeScreen> createState() => _WelcomeScreenState();
+}
+
+class _WelcomeScreenState extends State<WelcomeScreen> {
+  final _prenom = TextEditingController();
+  final _nom = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _saving = false;
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthService>();
     return Scaffold(
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Spacer(),
-              // Logo
-              Container(
-                width: 72, height: 72,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1D9E75),
-                  borderRadius: BorderRadius.circular(20),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Spacer(),
+                Container(
+                  width: 72, height: 72,
+                  decoration: BoxDecoration(color: const Color(0xFF1D9E75), borderRadius: BorderRadius.circular(20)),
+                  child: const Icon(Icons.home_work_rounded, color: Colors.white, size: 36),
                 ),
-                child: const Icon(Icons.home_work_rounded, color: Colors.white, size: 36),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Gestion Locative',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Gérez vos biens, locataires et finances\nen toute simplicité.',
-                style: TextStyle(fontSize: 15, color: Colors.grey[600], height: 1.5),
-              ),
-              const Spacer(),
-              if (auth.error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    auth.error!,
-                    style: const TextStyle(color: Color(0xFFE24B4A), fontSize: 13),
-                    textAlign: TextAlign.center,
+                const SizedBox(height: 24),
+                const Text('Bienvenue !', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Text('Entrez votre nom pour commencer.', style: TextStyle(fontSize: 15, color: Colors.grey[600], height: 1.5)),
+                const Spacer(),
+                TextFormField(
+                  controller: _prenom,
+                  decoration: InputDecoration(
+                    labelText: 'Prénom',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    prefixIcon: const Icon(Icons.person_outline),
                   ),
+                  textCapitalization: TextCapitalization.words,
+                  validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
                 ),
-              // Bouton Google
-              ElevatedButton.icon(
-                onPressed: auth.isLoading ? null : () async {
-                  final ok = await auth.signIn();
-                  if (ok && context.mounted) {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (_) => const HomeScreen()),
-                    );
-                  }
-                },
-                icon: auth.isLoading
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : Image.network(
-                        'https://www.google.com/favicon.ico',
-                        width: 18, height: 18,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.login, size: 18),
-                      ),
-                label: Text(
-                  auth.isLoading ? 'Connexion…' : 'Continuer avec Google',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _nom,
+                  decoration: InputDecoration(
+                    labelText: 'Nom',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    prefixIcon: const Icon(Icons.person_outline),
+                  ),
+                  textCapitalization: TextCapitalization.words,
                 ),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  backgroundColor: const Color(0xFF1D9E75),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: _saving ? null : _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1D9E75),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  child: _saving
+                      ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                      : const Text('Commencer', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Vos données sont stockées dans votre Google Drive personnel.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-              ),
-              const Spacer(),
-            ],
+                const Spacer(),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    await context.read<UserService>().saveUser(_prenom.text.trim(), _nom.text.trim());
+    if (mounted) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+    }
   }
 }

@@ -308,6 +308,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: "fab_finances",
         onPressed: () => showModalBottomSheet(
           context: context,
           isScrollControlled: true,
