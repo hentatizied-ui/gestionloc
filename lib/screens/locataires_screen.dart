@@ -1,13 +1,14 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:printing/printing.dart';
-import '../services/pdf_service.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../services/data_service.dart';
 import '../services/user_service.dart';
+import '../services/pdf_service.dart';
 import '../models/models.dart';
 import '../main.dart';
 
@@ -53,16 +54,16 @@ class _LocataireRow extends StatelessWidget {
   final DataService data;
   const _LocataireRow({required this.loc, required this.data});
 
-  Color get _statusColor {
-    switch (loc.statut) {
+  Color _statusColor(StatutPaiement s) {
+    switch (s) {
       case StatutPaiement.aJour: return AppTheme.primary;
       case StatutPaiement.enRetard: return AppTheme.warning;
       case StatutPaiement.retardCritique: return AppTheme.danger;
     }
   }
 
-  String get _statusLabel {
-    switch (loc.statut) {
+  String _statusLabel(StatutPaiement s) {
+    switch (s) {
       case StatutPaiement.aJour: return 'À jour';
       case StatutPaiement.enRetard: return 'En retard';
       case StatutPaiement.retardCritique: return 'Retard critique';
@@ -97,8 +98,8 @@ class _LocataireRow extends StatelessWidget {
               const SizedBox(height: 4),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: _statusColor.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
-                child: Text(_statusLabel, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: _statusColor)),
+                decoration: BoxDecoration(color: _statusColor(data.getStatutLocataire(loc)).withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+                child: Text(_statusLabel(data.getStatutLocataire(loc)), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: _statusColor(data.getStatutLocataire(loc)))),
               ),
             ]),
           ]),
@@ -118,7 +119,7 @@ class _LocataireDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bien = data.getBienById(loc.bienId);
-    final prochaine = _prochaineEcheance();
+    final prochaine = DateTime(DateTime.now().year, DateTime.now().month + 1, 1);
 
     return DraggableScrollableSheet(
       initialChildSize: 0.9,
@@ -147,6 +148,8 @@ class _LocataireDetail extends StatelessWidget {
               onPressed: () { data.supprimerLocataire(loc.id); Navigator.pop(context); }),
           ]),
           const Divider(height: 24),
+          _TypeLocataireBadge(loc: loc),
+          const SizedBox(height: 10),
           _InfoRow('Téléphone', loc.telephone),
           _InfoRow('Bien loué', bien?.nom ?? 'Non assigné'),
           _InfoRow('Début bail', _dateF.format(loc.debutBail)),
@@ -154,7 +157,6 @@ class _LocataireDetail extends StatelessWidget {
           _InfoRow('Dépôt', _euro.format(loc.depot)),
           if (bien != null) _InfoRow('Loyer', '${_euro.format(bien.loyerMensuel)}/mois'),
           const SizedBox(height: 16),
-
           // Prochaine échéance
           Container(
             padding: const EdgeInsets.all(14),
@@ -176,8 +178,6 @@ class _LocataireDetail extends StatelessWidget {
             ]),
           ),
           const SizedBox(height: 20),
-
-          // Historique
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             const Text('Historique des paiements', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
           ]),
@@ -186,11 +186,6 @@ class _LocataireDetail extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  DateTime _prochaineEcheance() {
-    final now = DateTime.now();
-    return DateTime(now.year, now.month + 1, 1);
   }
 }
 
@@ -235,7 +230,7 @@ class _HistoriquePaiementsState extends State<_HistoriquePaiements> {
     final bien = widget.bien;
     final montant = (bien?.loyerMensuel ?? 0) + (bien?.charges ?? 0);
     final tx = widget.data.nouvTransaction(
-      label: 'Loyer ${_dateMoisF.format(mois)} - ${widget.loc.nomComplet}',
+      label: 'Loyer ' + _capitalize(_dateMoisF.format(mois)) + ' - ' + widget.loc.nomComplet,
       montant: montant,
       type: TypeTransaction.loyer,
       date: DateTime(mois.year, mois.month, 1),
@@ -251,6 +246,8 @@ class _HistoriquePaiementsState extends State<_HistoriquePaiements> {
     setState(() {});
   }
 
+  String _capitalize(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
   @override
   Widget build(BuildContext context) {
     final mois = _getMois();
@@ -260,7 +257,6 @@ class _HistoriquePaiementsState extends State<_HistoriquePaiements> {
       children: mois.map((m) {
         final paiement = _getPaiement(m);
         final estPaye = paiement != null;
-        final montant = widget.bien != null ? (widget.bien!.loyerMensuel + widget.bien!.charges) : 0.0;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
@@ -302,7 +298,11 @@ class _HistoriquePaiementsState extends State<_HistoriquePaiements> {
                 IconButton(
                   icon: const Icon(Icons.receipt_long_outlined, size: 18, color: AppTheme.primary),
                   tooltip: 'Quittance',
-                  onPressed: () => _showQuittance(context, m, paiement),
+                  onPressed: () => showModalBottomSheet(
+                    context: context, isScrollControlled: true,
+                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                    builder: (_) => _QuittanceSheet(loc: widget.loc, bien: widget.bien, mois: m, paiement: paiement),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.undo, size: 18, color: Colors.grey),
@@ -315,22 +315,6 @@ class _HistoriquePaiementsState extends State<_HistoriquePaiements> {
       }).toList(),
     );
   }
-
-  void _showQuittance(BuildContext context, DateTime mois, Transaction paiement) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => _QuittanceSheet(
-        loc: widget.loc,
-        bien: widget.bien,
-        mois: mois,
-        paiement: paiement,
-      ),
-    );
-  }
-
-  String _capitalize(String s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
 }
 
 // ─── QUITTANCE ─────────────────────────────────────────────────────────────
@@ -340,24 +324,53 @@ class _QuittanceSheet extends StatelessWidget {
   final Bien? bien;
   final DateTime mois;
   final Transaction paiement;
-  const _QuittanceSheet({required this.loc, required this.bien, required this.mois, required this.paiement});
 
-  String _capitalize(String s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+  const _QuittanceSheet({
+    required this.loc,
+    required this.bien,
+    required this.mois,
+    required this.paiement,
+  });
+
+  String _capitalize(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+  String _messageType() {
+    final moisStr = _capitalize(DateFormat('MMMM yyyy', 'fr_FR').format(mois));
+    final sb = StringBuffer();
+    sb.write('Bonjour ');
+    sb.write(loc.prenom);
+    sb.writeln(',');
+    sb.writeln('');
+    sb.write('Veuillez trouver ci-joint votre quittance de loyer pour le mois de ');
+    sb.write(moisStr);
+    sb.writeln('.');
+    sb.writeln('');
+    sb.writeln('Cordialement,');
+    sb.write('Mohamed SAAFI & Zied HENTATI');
+    return sb.toString();
+  }
+
+  void _copierMessage(BuildContext context) {
+    Clipboard.setData(ClipboardData(text: _messageType()));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Message copié ! Collez-le dans WhatsApp ou Mail après avoir partagé le PDF.'),
+        backgroundColor: AppTheme.primary,
+        duration: Duration(seconds: 3),
+      ));
+    }
+  }
 
   Future<Uint8List?> _getPdfBytes(BuildContext context) async {
     if (bien == null) return null;
     try {
       return await PdfService.genererQuittance(
-        locataire: loc,
-        bien: bien!,
-        paiement: paiement,
-        mois: mois,
+        locataire: loc, bien: bien!, paiement: paiement, mois: mois,
       );
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur PDF: $e'), backgroundColor: AppTheme.danger),
-        );
+          SnackBar(content: Text('Erreur PDF: $e'), backgroundColor: AppTheme.danger));
       }
       return null;
     }
@@ -367,46 +380,23 @@ class _QuittanceSheet extends StatelessWidget {
     final bytes = await _getPdfBytes(context);
     if (bytes == null || !context.mounted) return;
     final moisStr = DateFormat('MMMM_yyyy', 'fr_FR').format(mois);
-    await Printing.layoutPdf(
-      onLayout: (_) => bytes,
-      name: 'Quittance_${loc.nom}_$moisStr.pdf',
-    );
+    await Printing.layoutPdf(onLayout: (_) => bytes, name: 'Quittance_' + loc.nom + '_' + moisStr + '.pdf');
   }
 
   void _partagerPdf(BuildContext context) async {
     final bytes = await _getPdfBytes(context);
     if (bytes == null || !context.mounted) return;
     final moisStr = DateFormat('MMMM_yyyy', 'fr_FR').format(mois);
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: 'Quittance_${loc.nom}_$moisStr.pdf',
-    );
-  }
-
-  void _ouvrirUrl(BuildContext context, String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (context.mounted) {
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('Lien'),
-            content: SelectableText(url),
-            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fermer'))],
-          ),
-        );
-      }
-    }
+    await Printing.sharePdf(bytes: bytes, filename: 'Quittance_' + loc.nom + '_' + moisStr + '.pdf');
   }
 
   @override
   Widget build(BuildContext context) {
     final moisStr = _capitalize(DateFormat('MMMM yyyy', 'fr_FR').format(mois));
+    final msg = _messageType();
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.7,
+      initialChildSize: 0.75,
       expand: false,
       builder: (_, ctrl) => ListView(
         controller: ctrl,
@@ -417,56 +407,78 @@ class _QuittanceSheet extends StatelessWidget {
           Row(children: [
             const Icon(Icons.receipt_long, color: AppTheme.primary),
             const SizedBox(width: 8),
-            Expanded(child: Text('Quittance - $moisStr', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500))),
+            Expanded(child: Text('Quittance - $moisStr',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500))),
           ]),
           const SizedBox(height: 20),
 
-          // PDF actions
+          // Message type
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('Message type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                TextButton.icon(
+                  icon: const Icon(Icons.copy, size: 14),
+                  label: const Text('Copier', style: TextStyle(fontSize: 12)),
+                  onPressed: () => _copierMessage(context),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppTheme.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 6),
+              Text(msg, style: TextStyle(fontSize: 12, color: Colors.grey[700], height: 1.6)),
+            ]),
+          ),
+          const SizedBox(height: 16),
+
+          // Actions
           const Text('Actions :', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
           const SizedBox(height: 12),
-
           _PartageBtn(
             icon: Icons.picture_as_pdf,
-            label: 'Voir / Imprimer le PDF',
+            label: 'Voir le PDF',
             color: AppTheme.danger,
             onTap: () => _afficherPdf(context),
           ),
           const SizedBox(height: 10),
           _PartageBtn(
             icon: Icons.share,
-            label: 'Partager le PDF',
+            label: 'Partager le PDF (WhatsApp, Mail...)',
             color: AppTheme.primary,
             onTap: () => _partagerPdf(context),
           ),
           const SizedBox(height: 10),
-          _PartageBtn(
-            icon: Icons.email_outlined,
-            label: 'Envoyer par Email',
-            color: AppTheme.blue,
-            onTap: () {
-              final sujet = Uri.encodeComponent('Quittance de loyer - $moisStr');
-              final url = 'mailto:${loc.email}?subject=$sujet';
-              _ouvrirUrl(context, url);
-            },
-          ),
-          const SizedBox(height: 10),
-          _PartageBtn(
-            icon: Icons.chat_outlined,
-            label: 'Envoyer par WhatsApp',
-            color: const Color(0xFF25D366),
-            onTap: () {
-              final phone = loc.telephone.replaceAll(RegExp(r'[^0-9]'), '');
-              final url = 'https://wa.me/$phone';
-              _ouvrirUrl(context, url);
-            },
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF8E1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.amber.shade200),
+            ),
+            child: Row(children: [
+              Icon(Icons.info_outline, size: 14, color: Colors.amber[800]),
+              const SizedBox(width: 8),
+              Expanded(child: Text(
+                'Astuce : Copiez le message, partagez le PDF, puis collez le message dans WhatsApp ou Mail.',
+                style: TextStyle(fontSize: 11, color: Colors.amber[900], height: 1.4),
+              )),
+            ]),
           ),
         ],
       ),
     );
   }
-
 }
 
+// ─── WIDGETS ───────────────────────────────────────────────────────────────
 
 class _PartageBtn extends StatelessWidget {
   final IconData icon;
@@ -498,7 +510,62 @@ class _PartageBtn extends StatelessWidget {
   }
 }
 
-// ─── INFOS ─────────────────────────────────────────────────────────────────
+class _TypeLocataireBadge extends StatelessWidget {
+  final Locataire loc;
+  const _TypeLocataireBadge({required this.loc});
+
+  @override
+  Widget build(BuildContext context) {
+    String label;
+    IconData icon;
+    Color color;
+    String detail = '';
+
+    switch (loc.typeLocataire) {
+      case TypeLocataire.particulier:
+        label = 'Particulier';
+        icon = Icons.person;
+        color = AppTheme.primary;
+        break;
+      case TypeLocataire.entreprise:
+        label = 'Entreprise';
+        icon = Icons.business;
+        color = AppTheme.blue;
+        detail = loc.raisonSociale ?? '';
+        break;
+      case TypeLocataire.sousTutelle:
+        label = 'Sous tutelle';
+        icon = Icons.supervised_user_circle;
+        color = AppTheme.warning;
+        detail = (loc.raisonSociale ?? '') ;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: color)),
+          ]),
+          if (detail.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(detail, style: TextStyle(fontSize: 12, color: color.withOpacity(0.8))),
+          ],
+
+        ],
+      ),
+    );
+  }
+}
 
 class _InfoRow extends StatelessWidget {
   final String label, value;
@@ -538,6 +605,8 @@ class _FormLocataireState extends State<FormLocataire> {
   late DateTime _debut = widget.locataire?.debutBail ?? DateTime.now();
   late DateTime _fin = widget.locataire?.finBail ?? DateTime.now().add(const Duration(days: 365));
   late StatutPaiement _statut = widget.locataire?.statut ?? StatutPaiement.aJour;
+  late TypeLocataire _typeLocataire = widget.locataire?.typeLocataire ?? TypeLocataire.particulier;
+  late final _raisonSociale = TextEditingController(text: widget.locataire?.raisonSociale ?? '');
   bool _saving = false;
 
   bool get _isEdit => widget.locataire != null;
@@ -564,14 +633,44 @@ class _FormLocataireState extends State<FormLocataire> {
               Text(_isEdit ? 'Modifier le locataire' : 'Nouveau locataire',
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
               const SizedBox(height: 20),
-              Row(children: [
-                Expanded(child: _TF(_prenom, 'Prénom')),
-                const SizedBox(width: 12),
-                Expanded(child: _TF(_nom, 'Nom')),
-              ]),
+
+              // 1. Type de locataire EN PREMIER
+              DropdownButtonFormField<TypeLocataire>(
+                value: _typeLocataire,
+                decoration: _deco('Type de locataire'),
+                items: const [
+                  DropdownMenuItem(value: TypeLocataire.particulier, child: Row(children: [Icon(Icons.person, size: 16), SizedBox(width: 8), Text('Particulier')])),
+                  DropdownMenuItem(value: TypeLocataire.entreprise, child: Row(children: [Icon(Icons.business, size: 16), SizedBox(width: 8), Text('Entreprise')])),
+                  DropdownMenuItem(value: TypeLocataire.sousTutelle, child: Row(children: [Icon(Icons.supervised_user_circle, size: 16), SizedBox(width: 8), Text('Sous tutelle')])),
+                ],
+                onChanged: (v) => setState(() => _typeLocataire = v!),
+              ),
+              const SizedBox(height: 14),
+
+              // 2. Champs selon le type
+              if (_typeLocataire == TypeLocataire.particulier) ...[
+                Row(children: [
+                  Expanded(child: _TF(_prenom, 'Prénom')),
+                  const SizedBox(width: 12),
+                  Expanded(child: _TF(_nom, 'Nom')),
+                ]),
+              ],
+              if (_typeLocataire == TypeLocataire.entreprise) ...[
+                _TF(_raisonSociale, "Nom de l'entreprise"),
+              ],
+              if (_typeLocataire == TypeLocataire.sousTutelle) ...[
+                _TF(_raisonSociale, "Organisme tuteur (ex: ADSEA de l'Aisne)"),
+                Row(children: [
+                  Expanded(child: _TF(_prenom, 'Prénom du bénéficiaire')),
+                  const SizedBox(width: 12),
+                  Expanded(child: _TF(_nom, 'Nom du bénéficiaire')),
+                ]),
+              ],
+
               _TF(_email, 'Email', keyboard: TextInputType.emailAddress),
               _TF(_tel, 'Téléphone', keyboard: TextInputType.phone),
               _TF(_depot, 'Dépôt de garantie (€)', keyboard: TextInputType.number),
+
               DropdownButtonFormField<String?>(
                 value: _bienId,
                 decoration: _deco('Bien loué'),
@@ -622,16 +721,25 @@ class _FormLocataireState extends State<FormLocataire> {
     if (!_key.currentState!.validate()) return;
     setState(() => _saving = true);
     if (_isEdit) {
+      final prenomVal = _typeLocataire == TypeLocataire.entreprise ? '' : _prenom.text;
+      final nomVal = _typeLocataire == TypeLocataire.entreprise ? _raisonSociale.text : _nom.text;
       await widget.data.modifierLocataire(widget.locataire!.copyWith(
-        prenom: _prenom.text, nom: _nom.text, email: _email.text, telephone: _tel.text,
+        prenom: prenomVal, nom: nomVal, email: _email.text, telephone: _tel.text,
         bienId: _bienId, debutBail: _debut, finBail: _fin,
         depot: double.tryParse(_depot.text) ?? 0, statut: _statut,
+        typeLocataire: _typeLocataire,
+        raisonSociale: _raisonSociale.text.isNotEmpty ? _raisonSociale.text : null,
       ));
     } else {
+      // Pour entreprise, nom = raison sociale, prenom vide
+      final prenomVal = _typeLocataire == TypeLocataire.entreprise ? '' : _prenom.text;
+      final nomVal = _typeLocataire == TypeLocataire.entreprise ? _raisonSociale.text : _nom.text;
       await widget.data.ajouterLocataire(widget.data.nouvLocataire(
-        prenom: _prenom.text, nom: _nom.text, email: _email.text, telephone: _tel.text,
+        prenom: prenomVal, nom: nomVal, email: _email.text, telephone: _tel.text,
         bienId: _bienId, debutBail: _debut, finBail: _fin,
         depot: double.tryParse(_depot.text) ?? 0,
+        typeLocataire: _typeLocataire,
+        raisonSociale: _raisonSociale.text.isNotEmpty ? _raisonSociale.text : null,
       ));
     }
     if (mounted) Navigator.pop(context);

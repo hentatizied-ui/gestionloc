@@ -85,6 +85,7 @@ class Bien {
 // ─── LOCATAIRE ─────────────────────────────────────────────────────────────
 
 enum StatutPaiement { aJour, enRetard, retardCritique }
+enum TypeLocataire { particulier, entreprise, sousTutelle }
 
 class Locataire {
   final String id;
@@ -97,12 +98,48 @@ class Locataire {
   final DateTime finBail;
   final double depot;
   final StatutPaiement statut;
+  final TypeLocataire typeLocataire;
+  // Pour entreprise : raison sociale
+  // Pour sous tutelle : nom de l'organisme tuteur
+  final String? raisonSociale;
   final String? note;
 
-  Locataire({required this.id, required this.prenom, required this.nom, required this.email, required this.telephone, this.bienId, required this.debutBail, required this.finBail, required this.depot, this.statut = StatutPaiement.aJour, this.note});
+  Locataire({
+    required this.id, required this.prenom, required this.nom,
+    required this.email, required this.telephone, this.bienId,
+    required this.debutBail, required this.finBail, required this.depot,
+    this.statut = StatutPaiement.aJour,
+    this.typeLocataire = TypeLocataire.particulier,
+    this.raisonSociale, this.note,
+  });
 
-  String get nomComplet => '$prenom $nom';
-  String get initiales => '${prenom.isNotEmpty ? prenom[0] : ''}${nom.isNotEmpty ? nom[0] : ''}'.toUpperCase();
+  // Nom affiché dans l'app
+  String get nomComplet {
+    switch (typeLocataire) {
+      case TypeLocataire.entreprise:
+        return raisonSociale?.isNotEmpty == true ? raisonSociale! : prenom + ' ' + nom;
+      case TypeLocataire.sousTutelle:
+        return prenom + ' ' + nom;
+      case TypeLocataire.particulier:
+        return prenom + ' ' + nom;
+    }
+  }
+
+  // Nom pour la quittance (texte légal complet)
+  String get nomQuittance {
+    switch (typeLocataire) {
+      case TypeLocataire.entreprise:
+        return raisonSociale?.isNotEmpty == true ? raisonSociale! : prenom + ' ' + nom;
+      case TypeLocataire.sousTutelle:
+        final org = raisonSociale?.isNotEmpty == true ? raisonSociale! : '';
+        final benef = prenom + ' ' + nom;
+        return org + ', (tuteur legal de ' + benef + ') representant legalement ce dernier dans le cadre de sa tutelle';
+      case TypeLocataire.particulier:
+        return prenom + ' ' + nom;
+    }
+  }
+
+  String get initiales => (prenom.isNotEmpty ? prenom[0] : '') + (nom.isNotEmpty ? nom[0] : '').toUpperCase();
 
   factory Locataire.fromMap(Map<String, String> m) => Locataire(
     id: m['id'] ?? '',
@@ -115,13 +152,35 @@ class Locataire {
     finBail: DateTime.tryParse(m['finBail'] ?? '') ?? DateTime.now(),
     depot: double.tryParse(m['depot'] ?? '0') ?? 0,
     statut: StatutPaiement.values.firstWhere((s) => s.name == m['statut'], orElse: () => StatutPaiement.aJour),
+    typeLocataire: TypeLocataire.values.firstWhere((t) => t.name == m['typeLocataire'], orElse: () => TypeLocataire.particulier),
+    raisonSociale: m['raisonSociale'],
     note: m['note'],
   );
 
-  List<String> toRow() => [id, bienId ?? '', prenom, nom, email, telephone, debutBail.toIso8601String().substring(0, 10), finBail.toIso8601String().substring(0, 10), depot.toString(), statut.name, note ?? ''];
+  List<String> toRow() => [
+    id, bienId ?? '', prenom, nom, email, telephone,
+    debutBail.toIso8601String().substring(0, 10),
+    finBail.toIso8601String().substring(0, 10),
+    depot.toString(), statut.name,
+    typeLocataire.name, raisonSociale ?? '',
+    note ?? '',
+  ];
 
-  Locataire copyWith({String? prenom, String? nom, String? email, String? telephone, String? bienId, DateTime? debutBail, DateTime? finBail, double? depot, StatutPaiement? statut}) =>
-      Locataire(id: id, prenom: prenom ?? this.prenom, nom: nom ?? this.nom, email: email ?? this.email, telephone: telephone ?? this.telephone, bienId: bienId ?? this.bienId, debutBail: debutBail ?? this.debutBail, finBail: finBail ?? this.finBail, depot: depot ?? this.depot, statut: statut ?? this.statut, note: this.note);
+  Locataire copyWith({
+    String? prenom, String? nom, String? email, String? telephone,
+    String? bienId, DateTime? debutBail, DateTime? finBail,
+    double? depot, StatutPaiement? statut,
+    TypeLocataire? typeLocataire, String? raisonSociale,
+  }) => Locataire(
+    id: id, prenom: prenom ?? this.prenom, nom: nom ?? this.nom,
+    email: email ?? this.email, telephone: telephone ?? this.telephone,
+    bienId: bienId ?? this.bienId,
+    debutBail: debutBail ?? this.debutBail, finBail: finBail ?? this.finBail,
+    depot: depot ?? this.depot, statut: statut ?? this.statut,
+    typeLocataire: typeLocataire ?? this.typeLocataire,
+    raisonSociale: raisonSociale ?? this.raisonSociale,
+    note: this.note,
+  );
 }
 
 // ─── TRANSACTION ───────────────────────────────────────────────────────────

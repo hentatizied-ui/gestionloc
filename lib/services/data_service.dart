@@ -59,11 +59,11 @@ class DataService extends ChangeNotifier {
       _tickets.where((t) => t.priorite == PrioriteTicket.urgent && t.statut != StatutTicket.resolu).length;
 
   int get locatairesEnRetard =>
-      _locataires.where((l) => l.statut != StatutPaiement.aJour).length;
+      _locataires.where((l) => getStatutLocataire(l) != StatutPaiement.aJour).length;
 
   double get montantEnAttente {
     return _locataires
-        .where((l) => l.statut != StatutPaiement.aJour)
+        .where((l) => getStatutLocataire(l) != StatutPaiement.aJour)
         .map((l) { final bien = getBienById(l.bienId); return bien?.loyerMensuel ?? 0.0; })
         .fold(0.0, (a, b) => a + b);
   }
@@ -77,6 +77,23 @@ class DataService extends ChangeNotifier {
       }
     }
     return result;
+  }
+
+  // ── Statut calculé automatiquement ────────────────────────────────────
+
+  StatutPaiement getStatutLocataire(Locataire loc) {
+    if (loc.bienId == null || loc.bienId!.isEmpty) return StatutPaiement.aJour;
+    final now = DateTime.now();
+    final moisCourant = DateTime(now.year, now.month, 1);
+    final moisPrecedent = DateTime(now.year, now.month - 1, 1);
+    final loyers = getLoyers(loc.bienId!);
+    final moisCourantPaye = loyers.any((t) =>
+        t.date.year == moisCourant.year && t.date.month == moisCourant.month);
+    final moisPrecedentPaye = loyers.any((t) =>
+        t.date.year == moisPrecedent.year && t.date.month == moisPrecedent.month);
+    if (!moisCourantPaye && !moisPrecedentPaye) return StatutPaiement.retardCritique;
+    if (!moisCourantPaye) return StatutPaiement.enRetard;
+    return StatutPaiement.aJour;
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────
@@ -201,32 +218,19 @@ class DataService extends ChangeNotifier {
     final ancienLoc = _locataires.firstWhere((l) => l.id == loc.id);
     final ancienBienId = ancienLoc.bienId;
     final nouveauBienId = loc.bienId;
-
-    // Mettre à jour le locataire en local
     final i = _locataires.indexWhere((l) => l.id == loc.id);
     if (i >= 0) _locataires[i] = loc;
-
-    // Si le bien a changé
     if (ancienBienId != nouveauBienId) {
-      // Libérer l'ancien bien
-      if (ancienBienId != null && ancienBienId.isNotEmpty) {
-        await _setBienLoue(ancienBienId, false, '');
-      }
-      // Occuper le nouveau bien
-      if (nouveauBienId != null && nouveauBienId.isNotEmpty) {
-        await _setBienLoue(nouveauBienId, true, loc.id);
-      }
+      if (ancienBienId != null && ancienBienId.isNotEmpty) await _setBienLoue(ancienBienId, false, '');
+      if (nouveauBienId != null && nouveauBienId.isNotEmpty) await _setBienLoue(nouveauBienId, true, loc.id);
     }
-
     await _sheets?.updateRow('Locataires', loc.id, loc.toRow());
     notifyListeners();
   }
 
   Future<void> supprimerLocataire(String id) async {
     final loc = _locataires.firstWhere((l) => l.id == id);
-    if (loc.bienId != null && loc.bienId!.isNotEmpty) {
-      await _setBienLoue(loc.bienId!, false, '');
-    }
+    if (loc.bienId != null && loc.bienId!.isNotEmpty) await _setBienLoue(loc.bienId!, false, '');
     _locataires.removeWhere((l) => l.id == id);
     await _sheets?.deleteRow('Locataires', id);
     notifyListeners();
@@ -286,8 +290,8 @@ class DataService extends ChangeNotifier {
   Bien nouvBien({required String nom, required String adresse, required String ville, required String codePostal, required String type, required int pieces, required double surface, required double loyer, required double charges, String? immeubleId, String? etage, String? numero}) =>
       Bien(id: 'bien_${_uuid.v4().substring(0, 8)}', nom: nom, adresse: adresse, ville: ville, codePostal: codePostal, type: type, pieces: pieces, surface: surface, loyerMensuel: loyer, charges: charges, immeubleId: immeubleId, etage: etage, numero: numero);
 
-  Locataire nouvLocataire({required String prenom, required String nom, required String email, required String telephone, String? bienId, required DateTime debutBail, required DateTime finBail, required double depot}) =>
-      Locataire(id: 'loc_${_uuid.v4().substring(0, 8)}', prenom: prenom, nom: nom, email: email, telephone: telephone, bienId: bienId, debutBail: debutBail, finBail: finBail, depot: depot);
+  Locataire nouvLocataire({required String prenom, required String nom, required String email, required String telephone, String? bienId, required DateTime debutBail, required DateTime finBail, required double depot, TypeLocataire typeLocataire = TypeLocataire.particulier, String? raisonSociale}) =>
+      Locataire(id: 'loc_${_uuid.v4().substring(0, 8)}', prenom: prenom, nom: nom, email: email, telephone: telephone, bienId: bienId, debutBail: debutBail, finBail: finBail, depot: depot, typeLocataire: typeLocataire, raisonSociale: raisonSociale);
 
   Transaction nouvTransaction({required String label, required double montant, required TypeTransaction type, DateTime? date, String? bienId, String? immeubleId, String? locataireId, String? note}) =>
       Transaction(id: 'tx_${_uuid.v4().substring(0, 8)}', label: label, montant: montant, type: type, date: date ?? DateTime.now(), bienId: bienId, immeubleId: immeubleId, locataireId: locataireId, note: note);
