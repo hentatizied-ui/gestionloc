@@ -1,0 +1,584 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:printing/printing.dart';
+import '../services/data_service.dart';
+import '../services/pdf_service.dart';
+import '../models/models.dart';
+import '../main.dart';
+
+final _euro = NumberFormat.currency(locale: 'fr_FR', symbol: '€', decimalDigits: 0);
+final _pct = NumberFormat('##0.0#', 'fr_FR');
+
+// ═══════════════════════════════════════════════════════════════
+// COMPTA SCREEN
+// ═══════════════════════════════════════════════════════════════
+
+class ComptaScreen extends StatefulWidget {
+  const ComptaScreen({super.key});
+  @override
+  State<ComptaScreen> createState() => _ComptaScreenState();
+}
+
+class _ComptaScreenState extends State<ComptaScreen> with SingleTickerProviderStateMixin {
+  late final _tab = TabController(length: 3, vsync: this);
+  int _annee = DateTime.now().year;
+
+  @override
+  void dispose() { _tab.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final data = context.watch<DataService>();
+    return Scaffold(
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(48),
+        child: Container(
+          color: Colors.white,
+          child: TabBar(
+            controller: _tab,
+            labelColor: AppTheme.primary,
+            unselectedLabelColor: Colors.grey[600],
+            indicatorColor: AppTheme.primary,
+            tabs: const [
+              Tab(text: 'Récapitulatif'),
+              Tab(text: 'Par bien'),
+              Tab(text: 'Graphiques'),
+            ],
+          ),
+        ),
+      ),
+      body: Column(children: [
+        Container(
+          color: Colors.grey[50],
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            IconButton(icon: const Icon(Icons.chevron_left, size: 20), onPressed: () => setState(() => _annee--)),
+            Text('Exercice $_annee', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+            IconButton(icon: const Icon(Icons.chevron_right, size: 20), onPressed: () => setState(() => _annee++)),
+          ]),
+        ),
+        Expanded(child: TabBarView(
+          controller: _tab,
+          children: [
+            _RecapTab(data: data, annee: _annee),
+            _ParBienTab(data: data, annee: _annee),
+            _GraphTab(data: data, annee: _annee),
+          ],
+        )),
+      ]),
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab_compta',
+        onPressed: () => _exportPdf(context, data),
+        backgroundColor: AppTheme.primary,
+        icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
+        label: const Text('Export PDF', style: TextStyle(color: Colors.white)),
+      ),
+    );
+  }
+
+  void _exportPdf(BuildContext context, DataService data) async {
+    try {
+      final bytes = await PdfService.genererBilanCompta(data: data, annee: _annee);
+      await Printing.sharePdf(bytes: bytes, filename: 'Bilan_$_annee.pdf');
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: AppTheme.danger),
+        );
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RECAPITULATIF
+// ═══════════════════════════════════════════════════════════════
+
+Map<String, double> _calcCompta(DataService data, int annee) {
+  final txs = data.transactions.where((t) => t.date.year == annee).toList();
+  double loyers = 0, chargesRec = 0, reparations = 0, assurances = 0, taxes = 0, autres = 0;
+  for (final t in txs) {
+    if (t.montant > 0) {
+      if (t.type == TypeTransaction.loyer) loyers += t.montant;
+      else chargesRec += t.montant;
+    } else {
+      final m = t.montant.abs();
+      switch (t.type) {
+        case TypeTransaction.reparation: reparations += m; break;
+        case TypeTransaction.assurance: assurances += m; break;
+        case TypeTransaction.taxe: taxes += m; break;
+        default: autres += m;
+      }
+    }
+  }
+  taxes += data.biens.fold<double>(0, (s, b) => s + b.taxeFonciere);
+  final cfMontant = data.chargesFixes.where((cf) => cf.actif).fold<double>(0, (s, cf) => s + cf.montant * 12);
+  final totalRev = loyers + chargesRec;
+  final totalChg = reparations + assurances + taxes + autres + cfMontant;
+  return {
+    'loyers': loyers, 'chargesRecuperees': chargesRec,
+    'totalRevenus': totalRev, 'chargesFixes': cfMontant,
+    'reparations': reparations, 'assurances': assurances,
+    'taxes': taxes, 'autres': autres,
+    'totalCharges': totalChg, 'resultatNet': totalRev - totalChg,
+  };
+}
+
+class _RecapTab extends StatelessWidget {
+  final DataService data;
+  final int annee;
+  const _RecapTab({required this.data, required this.annee});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _calcCompta(data, annee);
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _SectionTitle('Compte de résultat $annee'),
+        const SizedBox(height: 8),
+        _LigneCompta('Loyers encaissés', c['loyers']!, isPositif: true),
+        _LigneCompta('Charges récupérées', c['chargesRecuperees']!, isPositif: true),
+        const Divider(),
+        _LigneCompta('Total revenus', c['totalRevenus']!, isPositif: true, isBold: true),
+        const SizedBox(height: 8),
+        _LigneCompta('Charges fixes (crédit, assurance)', c['chargesFixes']!, isPositif: false),
+        _LigneCompta('Entretien & réparations', c['reparations']!, isPositif: false),
+        _LigneCompta('Assurances', c['assurances']!, isPositif: false),
+        _LigneCompta('Taxes foncières', c['taxes']!, isPositif: false),
+        _LigneCompta('Autres charges', c['autres']!, isPositif: false),
+        const Divider(),
+        _LigneCompta('Total charges', c['totalCharges']!, isPositif: false, isBold: true),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: c['resultatNet']! >= 0 ? AppTheme.primaryLight : const Color(0xFFFCEBEB),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: c['resultatNet']! >= 0 ? AppTheme.primary.withOpacity(0.3) : AppTheme.danger.withOpacity(0.3)),
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            const Text('RÉSULTAT NET', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            Text(_euro.format(c['resultatNet']!),
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16,
+                    color: c['resultatNet']! >= 0 ? AppTheme.primary : AppTheme.danger)),
+          ]),
+        ),
+        const SizedBox(height: 20),
+        _SectionTitle('Indicateurs clés'),
+        const SizedBox(height: 8),
+        GridView.count(
+          crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 2.0,
+          children: [
+            _KpiBox('Taux occupation', '${(data.tauxOccupation * 100).toStringAsFixed(0)}%', AppTheme.primary),
+            _KpiBox('Charges / Revenus', c['totalRevenus']! > 0 ? '${_pct.format(c['totalCharges']! / c['totalRevenus']! * 100)}%' : '-', AppTheme.warning),
+            _KpiBox('Revenus moy./mois', _euro.format(c['totalRevenus']! / 12), AppTheme.blue),
+            _KpiBox('Charges moy./mois', _euro.format(c['totalCharges']! / 12), AppTheme.danger),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PAR BIEN
+// ═══════════════════════════════════════════════════════════════
+
+class _ParBienTab extends StatelessWidget {
+  final DataService data;
+  final int annee;
+  const _ParBienTab({required this.data, required this.annee});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <Widget>[];
+
+    for (final immeuble in data.immeubles) {
+      final biens = data.getBiensDeLImmeuble(immeuble.id);
+      if (biens.isEmpty) continue;
+      final chargesCommunes = data.transactions.where((t) =>
+        !t.isRecette && t.date.year == annee &&
+        (t.bienId == null || t.bienId!.isEmpty) &&
+        t.immeubleId == immeuble.id
+      ).toList();
+      items.add(_ImmeubleSection(immeuble: immeuble, biens: biens,
+          chargesCommunes: chargesCommunes, data: data, annee: annee));
+    }
+
+    final biensSansImm = data.biensSansImmeuble;
+    if (biensSansImm.isNotEmpty) {
+      items.add(Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 6),
+        child: Text('Biens indépendants',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey[700])),
+      ));
+      for (final b in biensSansImm) {
+        items.add(_BienComptaCard(bien: b, data: data, annee: annee));
+      }
+    }
+
+    return ListView(padding: const EdgeInsets.all(16), children: items);
+  }
+}
+
+class _ImmeubleSection extends StatefulWidget {
+  final Immeuble immeuble;
+  final List<Bien> biens;
+  final List<Transaction> chargesCommunes;
+  final DataService data;
+  final int annee;
+  const _ImmeubleSection({required this.immeuble, required this.biens,
+      required this.chargesCommunes, required this.data, required this.annee});
+  @override
+  State<_ImmeubleSection> createState() => _ImmeubleSectionState();
+}
+
+class _ImmeubleSectionState extends State<_ImmeubleSection> {
+  bool _expanded = true;
+  @override
+  Widget build(BuildContext context) {
+    final totalCommun = widget.chargesCommunes.fold<double>(0, (s, t) => s + t.montant.abs());
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      InkWell(
+        onTap: () => setState(() => _expanded = !_expanded),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(color: AppTheme.primaryLight,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.primary.withOpacity(0.3))),
+          child: Row(children: [
+            const Icon(Icons.apartment, size: 16, color: AppTheme.primaryDark),
+            const SizedBox(width: 8),
+            Expanded(child: Text(widget.immeuble.nom,
+                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13, color: AppTheme.primaryDark))),
+            Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                color: AppTheme.primaryDark, size: 18),
+          ]),
+        ),
+      ),
+      if (_expanded) ...[
+        const SizedBox(height: 8),
+        ...widget.biens.map((b) => _BienComptaCard(bien: b, data: widget.data, annee: widget.annee)),
+        _ChargesCommunesCard(charges: widget.chargesCommunes, total: totalCommun),
+      ],
+      const SizedBox(height: 16),
+    ]);
+  }
+}
+
+class _ChargesCommunesCard extends StatefulWidget {
+  final List<Transaction> charges;
+  final double total;
+  const _ChargesCommunesCard({required this.charges, required this.total});
+  @override
+  State<_ChargesCommunesCard> createState() => _ChargesCommunesCardState();
+}
+
+class _ChargesCommunesCardState extends State<_ChargesCommunesCard> {
+  bool _expanded = false;
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      color: const Color(0xFFFFF8E1),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(children: [
+            Row(children: [
+              const Icon(Icons.share_outlined, size: 16, color: Colors.amber),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('Charges communes',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+              Text(_euro.format(widget.total),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppTheme.danger)),
+              const SizedBox(width: 6),
+              Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                  color: Colors.grey, size: 18),
+            ]),
+            if (_expanded) ...[
+              const Divider(height: 16),
+              if (widget.charges.isEmpty)
+                Text('Ajoutez des charges communes via Finances → Transactions.',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]))
+              else
+                ...widget.charges.map((tx) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(children: [
+                    Expanded(child: Text(tx.label, style: const TextStyle(fontSize: 11))),
+                    Text('-' + _euro.format(tx.montant.abs()),
+                        style: const TextStyle(fontSize: 11, color: AppTheme.danger)),
+                  ]),
+                )),
+            ],
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _BienComptaCard extends StatelessWidget {
+  final Bien bien;
+  final DataService data;
+  final int annee;
+  const _BienComptaCard({required this.bien, required this.data, required this.annee});
+
+  @override
+  Widget build(BuildContext context) {
+    final txs = data.getTransactionsDuBien(bien.id).where((t) => t.date.year == annee).toList();
+    final loyerEncaisse = txs.where((t) => t.isRecette && t.type == TypeTransaction.loyer).fold<double>(0, (s, t) => s + t.montant);
+    final chargesRec = txs.where((t) => t.isRecette && t.type != TypeTransaction.loyer).fold<double>(0, (s, t) => s + t.montant);
+    final reparations = txs.where((t) => !t.isRecette).fold<double>(0, (s, t) => s + t.montant.abs());
+    final loyerAnnuel = bien.loyerMensuel * 12;
+    final taxe = bien.taxeFonciere;
+    final totalCharges = reparations + taxe;
+    final net = loyerEncaisse + chargesRec - totalCharges;
+    final rendBrut = bien.prixAchat > 0 ? (loyerAnnuel / bien.prixAchat * 100) : 0.0;
+    final rendNet = bien.prixAchat > 0 ? (net / bien.prixAchat * 100) : 0.0;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text(bien.nom, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13))),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: net >= 0 ? AppTheme.primaryLight : const Color(0xFFFCEBEB),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(_euro.format(net), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500,
+                  color: net >= 0 ? AppTheme.primary : AppTheme.danger)),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          _LigneD('Loyer annuel théorique', loyerAnnuel, true, isTheo: true),
+          _LigneD('Loyer encaissé', loyerEncaisse, true),
+          if (chargesRec > 0) _LigneD('Charges récupérées', chargesRec, true),
+          const Divider(height: 12),
+          if (taxe > 0) _LigneD('Taxe foncière', taxe, false),
+          if (reparations > 0) _LigneD('Réparations / entretien', reparations, false),
+          if (bien.prixAchat > 0) ...[
+            const Divider(height: 12),
+            Row(children: [
+              Expanded(child: _MiniStat2('Prix achat', _euro.format(bien.prixAchat), Colors.grey[700]!)),
+              Expanded(child: _MiniStat2('Rdt brut', _pct.format(rendBrut) + '%', AppTheme.blue)),
+              Expanded(child: _MiniStat2('Rdt net', _pct.format(rendNet) + '%',
+                  rendNet > 0 ? AppTheme.primary : AppTheme.danger)),
+            ]),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+class _LigneD extends StatelessWidget {
+  final String label;
+  final double value;
+  final bool isRevenu;
+  final bool isTheo;
+  const _LigneD(this.label, this.value, this.isRevenu, {this.isTheo = false});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(label, style: TextStyle(fontSize: 12,
+            color: isTheo ? Colors.grey[400] : Colors.grey[700],
+            fontStyle: isTheo ? FontStyle.italic : FontStyle.normal)),
+        Text((isRevenu ? '+' : '-') + _euro.format(value),
+            style: TextStyle(fontSize: 12,
+                fontWeight: isTheo ? FontWeight.normal : FontWeight.w500,
+                color: isTheo ? Colors.grey[400] : (isRevenu ? AppTheme.primary : AppTheme.danger))),
+      ]),
+    );
+  }
+}
+
+class _MiniStat2 extends StatelessWidget {
+  final String label, value;
+  final Color color;
+  const _MiniStat2(this.label, this.value, this.color);
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+      const SizedBox(height: 2),
+      Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: color)),
+    ]);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GRAPHIQUES
+// ═══════════════════════════════════════════════════════════════
+
+class _GraphTab extends StatelessWidget {
+  final DataService data;
+  final int annee;
+  const _GraphTab({required this.data, required this.annee});
+
+  @override
+  Widget build(BuildContext context) {
+    final moisLabels = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+    final revenus = List<double>.filled(12, 0);
+    final charges = List<double>.filled(12, 0);
+    for (final t in data.transactions.where((t) => t.date.year == annee)) {
+      if (t.isRecette) revenus[t.date.month - 1] += t.montant;
+      else charges[t.date.month - 1] += t.montant.abs();
+    }
+    final maxVal = [...revenus, ...charges].fold<double>(0, (a, b) => a > b ? a : b);
+    final compta = _calcCompta(data, annee);
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Revenus vs Charges mensuels', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+            const SizedBox(height: 12),
+            Row(children: [
+              _Dot(AppTheme.primary, 'Revenus'),
+              const SizedBox(width: 16),
+              _Dot(AppTheme.danger, 'Charges'),
+            ]),
+            const SizedBox(height: 12),
+            SizedBox(height: 160, child: BarChart(BarChartData(
+              maxY: maxVal == 0 ? 1000 : maxVal * 1.2,
+              barGroups: List.generate(12, (i) => BarChartGroupData(
+                x: i, barsSpace: 2,
+                barRods: [
+                  BarChartRodData(toY: revenus[i], color: AppTheme.primary, width: 10,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(3))),
+                  BarChartRodData(toY: charges[i], color: AppTheme.danger.withOpacity(0.7), width: 10,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(3))),
+                ],
+              )),
+              titlesData: FlTitlesData(
+                leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true,
+                    getTitlesWidget: (v, _) => Text(moisLabels[v.toInt()],
+                        style: const TextStyle(fontSize: 10, color: Colors.grey)))),
+              ),
+              gridData: const FlGridData(show: false),
+              borderData: FlBorderData(show: false),
+            ))),
+          ]),
+        )),
+        const SizedBox(height: 16),
+        Card(child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Répartition des charges', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+            const SizedBox(height: 16),
+            ...{
+              'Charges fixes': compta['chargesFixes']!,
+              'Réparations': compta['reparations']!,
+              'Assurances': compta['assurances']!,
+              'Taxes': compta['taxes']!,
+              'Autres': compta['autres']!,
+            }.entries.where((e) => e.value > 0).map((e) {
+              final total = compta['totalCharges']!;
+              final pct = total > 0 ? e.value / total : 0.0;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text(e.key, style: const TextStyle(fontSize: 12)),
+                    Text(_euro.format(e.value) + ' (' + _pct.format(pct * 100) + '%)',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                  ]),
+                  const SizedBox(height: 4),
+                  ClipRRect(borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(value: pct, minHeight: 6,
+                        backgroundColor: Colors.grey[200],
+                        valueColor: const AlwaysStoppedAnimation(AppTheme.primary))),
+                ]),
+              );
+            }),
+          ]),
+        )),
+      ],
+    );
+  }
+}
+
+class _Dot extends StatelessWidget {
+  final Color color;
+  final String label;
+  const _Dot(this.color, this.label);
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+      const SizedBox(width: 4),
+      Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+    ]);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WIDGETS COMMUNS
+// ═══════════════════════════════════════════════════════════════
+
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  const _SectionTitle(this.title);
+  @override
+  Widget build(BuildContext context) {
+    return Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: AppTheme.primaryDark));
+  }
+}
+
+class _LigneCompta extends StatelessWidget {
+  final String label;
+  final double value;
+  final bool isPositif;
+  final bool isBold;
+  const _LigneCompta(this.label, this.value, {required this.isPositif, this.isBold = false});
+  @override
+  Widget build(BuildContext context) {
+    final color = isPositif ? AppTheme.primary : AppTheme.danger;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(label, style: TextStyle(fontSize: 13, fontWeight: isBold ? FontWeight.w600 : FontWeight.normal)),
+        Text((isPositif ? '+' : '-') + _euro.format(value.abs()),
+            style: TextStyle(fontSize: 13, fontWeight: isBold ? FontWeight.w600 : FontWeight.w500, color: color)),
+      ]),
+    );
+  }
+}
+
+class _KpiBox extends StatelessWidget {
+  final String label, value;
+  final Color color;
+  const _KpiBox(this.label, this.value, this.color);
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.2))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+        const SizedBox(height: 4),
+        Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: color)),
+      ]),
+    );
+  }
+}

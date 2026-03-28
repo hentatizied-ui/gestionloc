@@ -13,6 +13,7 @@ class DataService extends ChangeNotifier {
   List<Locataire> _locataires = [];
   List<Transaction> _transactions = [];
   List<Ticket> _tickets = [];
+  List<ChargeFixe> _chargesFixes = [];
 
   bool _loading = false;
   String? _error;
@@ -24,6 +25,7 @@ class DataService extends ChangeNotifier {
   List<Ticket> get tickets => List.unmodifiable(_tickets);
   bool get loading => _loading;
   String? get error => _error;
+  List<ChargeFixe> get chargesFixes => List.unmodifiable(_chargesFixes);
 
   // ── Stats ──────────────────────────────────────────────────────────────
 
@@ -147,13 +149,16 @@ class DataService extends ChangeNotifier {
         _sheets!.readSheetAsMap('Locataires'),
         _sheets!.readSheetAsMap('Transactions'),
         _sheets!.readSheetAsMap('Tickets'),
+        _sheets!.readSheetAsMap('ChargesFixe'),
       ]);
       _immeubles = results[0].map(Immeuble.fromMap).toList();
       _biens = results[1].map(Bien.fromMap).toList();
       _locataires = results[2].map(Locataire.fromMap).toList();
       _transactions = results[3].map(Transaction.fromMap).toList();
       _tickets = results[4].map(Ticket.fromMap).toList();
+      _chargesFixes = results[5].map(ChargeFixe.fromMap).toList();
       _transactions.sort((a, b) => b.date.compareTo(a.date));
+      await _genererChargesFixesMois();
     } catch (e) {
       _error = 'Erreur de chargement : $e';
     }
@@ -282,6 +287,48 @@ class DataService extends ChangeNotifier {
     notifyListeners();
   }
 
+    // ── CHARGES FIXES ──────────────────────────────────────────────────────────
+
+  Future<void> _genererChargesFixesMois() async {
+    final now = DateTime.now();
+    final actives = _chargesFixes.where((c) => c.actif && !c.dateDebut.isAfter(DateTime(now.year, now.month, 1))).toList();
+    for (final cf in actives) {
+      final dejaGeneree = _transactions.any((t) =>
+          t.label == cf.label && t.date.year == now.year && t.date.month == now.month);
+      if (!dejaGeneree) {
+        final tx = nouvTransaction(
+          label: cf.label,
+          montant: -cf.montant.abs(),
+          type: cf.type,
+          date: DateTime(now.year, now.month, 1),
+          bienId: cf.bienId,
+          note: 'Charge fixe auto',
+        );
+        _transactions.insert(0, tx);
+        await _sheets?.appendRow('Transactions', tx.toRow());
+      }
+    }
+  }
+
+  Future<void> ajouterChargeFixe(ChargeFixe cf) async {
+    _chargesFixes.add(cf);
+    await _sheets?.appendRow('ChargesFixe', cf.toRow());
+    notifyListeners();
+  }
+
+  Future<void> modifierChargeFixe(ChargeFixe cf) async {
+    final i = _chargesFixes.indexWhere((c) => c.id == cf.id);
+    if (i >= 0) _chargesFixes[i] = cf;
+    await _sheets?.updateRow('ChargesFixe', cf.id, cf.toRow());
+    notifyListeners();
+  }
+
+  Future<void> supprimerChargeFixe(String id) async {
+    _chargesFixes.removeWhere((c) => c.id == id);
+    await _sheets?.deleteRow('ChargesFixe', id);
+    notifyListeners();
+  }
+
   // ── Factories ──────────────────────────────────────────────────────────
 
   Immeuble nouvImmeuble({required String nom, required String adresse, required String ville, required String codePostal, required int nbEtages}) =>
@@ -298,4 +345,7 @@ class DataService extends ChangeNotifier {
 
   Ticket nouvTicket({required String titre, required String description, required String bienId, String? immeubleId, required PrioriteTicket priorite, String? rapportePar}) =>
       Ticket(id: 'tkt_${_uuid.v4().substring(0, 8)}', titre: titre, description: description, bienId: bienId, immeubleId: immeubleId, priorite: priorite, rapportePar: rapportePar);
+
+  ChargeFixe nouvChargeFixe({required String label, required double montant, required TypeTransaction type, String? bienId, DateTime? dateDebut, DateTime? dateFin}) =>
+      ChargeFixe(id: 'cf_${_uuid.v4().substring(0, 8)}', label: label, montant: montant, type: type, bienId: bienId, dateDebut: dateDebut ?? DateTime.now(), dateFin: dateFin);
 }

@@ -1,3 +1,12 @@
+// ─── HELPERS ───────────────────────────────────────────────────────────────
+
+String _fixCp(String cp) {
+  if (cp.isEmpty) return cp;
+  final digits = cp.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.length == 4) return '0$digits';
+  return cp;
+}
+
 // ─── IMMEUBLE ──────────────────────────────────────────────────────────────
 
 class Immeuble {
@@ -16,7 +25,7 @@ class Immeuble {
     nom: m['nom'] ?? '',
     adresse: m['adresse'] ?? '',
     ville: m['ville'] ?? '',
-    codePostal: m['codePostal'] ?? '',
+    codePostal: _fixCp(m['codePostal'] ?? ''),
     nbEtages: int.tryParse(m['nbEtages'] ?? '0') ?? 0,
     note: m['note'],
   );
@@ -43,12 +52,14 @@ class Bien {
   final int pieces;
   final double loyerMensuel;
   final double charges;
+  final double prixAchat;
+  final double taxeFonciere;
   final bool estLoue;
   final String? locataireId;
   final DateTime dateAjout;
   final String? note;
 
-  Bien({required this.id, this.immeubleId, required this.nom, required this.type, required this.adresse, required this.ville, required this.codePostal, this.etage, this.numero, required this.surface, required this.pieces, required this.loyerMensuel, required this.charges, this.estLoue = false, this.locataireId, DateTime? dateAjout, this.note}) : dateAjout = dateAjout ?? DateTime.now();
+  Bien({required this.id, this.immeubleId, required this.nom, required this.type, required this.adresse, required this.ville, required this.codePostal, this.etage, this.numero, required this.surface, required this.pieces, required this.loyerMensuel, required this.charges, this.prixAchat = 0, this.taxeFonciere = 0, this.estLoue = false, this.locataireId, DateTime? dateAjout, this.note}) : dateAjout = dateAjout ?? DateTime.now();
 
   factory Bien.fromMap(Map<String, String> m) => Bien(
     id: m['id'] ?? '',
@@ -57,13 +68,15 @@ class Bien {
     type: m['type'] ?? 'appartement',
     adresse: m['adresse'] ?? '',
     ville: m['ville'] ?? '',
-    codePostal: m['codePostal'] ?? '',
+    codePostal: _fixCp(m['codePostal'] ?? ''),
     etage: m['etage'],
     numero: m['numero'],
     surface: double.tryParse(m['surface'] ?? '0') ?? 0,
     pieces: int.tryParse(m['pieces'] ?? '0') ?? 0,
     loyerMensuel: double.tryParse(m['loyerMensuel'] ?? '0') ?? 0,
     charges: double.tryParse(m['charges'] ?? '0') ?? 0,
+    prixAchat: double.tryParse(m['prixAchat'] ?? '0') ?? 0,
+    taxeFonciere: double.tryParse(m['taxeFonciere'] ?? '0') ?? 0,
     estLoue: m['estLoue'] == 'OUI',
     locataireId: m['locataireId'],
     dateAjout: DateTime.tryParse(m['dateAjout'] ?? '') ?? DateTime.now(),
@@ -74,12 +87,13 @@ class Bien {
     id, immeubleId ?? '', nom, type, adresse, ville, codePostal,
     etage ?? '', numero ?? '', surface.toString(), pieces.toString(),
     loyerMensuel.toString(), charges.toString(),
+    prixAchat.toString(), taxeFonciere.toString(),
     estLoue ? 'OUI' : 'NON', locataireId ?? '',
     dateAjout.toIso8601String().substring(0, 10), note ?? '',
   ];
 
-  Bien copyWith({String? nom, String? immeubleId, String? adresse, String? ville, String? codePostal, String? type, int? pieces, double? surface, double? loyerMensuel, double? charges, bool? estLoue, String? locataireId, String? etage, String? numero}) =>
-      Bien(id: id, immeubleId: immeubleId ?? this.immeubleId, nom: nom ?? this.nom, type: type ?? this.type, adresse: adresse ?? this.adresse, ville: ville ?? this.ville, codePostal: codePostal ?? this.codePostal, etage: etage ?? this.etage, numero: numero ?? this.numero, surface: surface ?? this.surface, pieces: pieces ?? this.pieces, loyerMensuel: loyerMensuel ?? this.loyerMensuel, charges: charges ?? this.charges, estLoue: estLoue ?? this.estLoue, locataireId: locataireId ?? this.locataireId, dateAjout: dateAjout, note: this.note);
+  Bien copyWith({String? nom, String? immeubleId, String? adresse, String? ville, String? codePostal, String? type, int? pieces, double? surface, double? loyerMensuel, double? charges, double? prixAchat, double? taxeFonciere, bool? estLoue, String? locataireId, String? etage, String? numero}) =>
+      Bien(id: id, immeubleId: immeubleId ?? this.immeubleId, nom: nom ?? this.nom, type: type ?? this.type, adresse: adresse ?? this.adresse, ville: ville ?? this.ville, codePostal: codePostal ?? this.codePostal, etage: etage ?? this.etage, numero: numero ?? this.numero, surface: surface ?? this.surface, pieces: pieces ?? this.pieces, loyerMensuel: loyerMensuel ?? this.loyerMensuel, charges: charges ?? this.charges, prixAchat: prixAchat ?? this.prixAchat, taxeFonciere: taxeFonciere ?? this.taxeFonciere, estLoue: estLoue ?? this.estLoue, locataireId: locataireId ?? this.locataireId, dateAjout: dateAjout, note: this.note);
 }
 
 // ─── LOCATAIRE ─────────────────────────────────────────────────────────────
@@ -252,4 +266,55 @@ class Ticket {
   );
 
   List<String> toRow() => [id, bienId, immeubleId ?? '', titre, description, priorite.name, statut.name, dateCreation.toIso8601String().substring(0, 10), dateResolution?.toIso8601String().substring(0, 10) ?? '', rapportePar ?? '', coutReparation?.toString() ?? ''];
+}
+
+
+const _sentinel = Object();
+
+class ChargeFixe {
+  final String id;
+  final String label;
+  final double montant;
+  final TypeTransaction type;
+  final String? bienId;
+  final DateTime dateDebut;
+  final DateTime? dateFin;
+
+  ChargeFixe({
+    required this.id, required this.label, required this.montant,
+    required this.type, this.bienId, required this.dateDebut,
+    this.dateFin,
+  });
+
+  bool get actif {
+    final now = DateTime.now();
+    final apresDebut = !now.isBefore(DateTime(dateDebut.year, dateDebut.month, 1));
+    final avantFin = dateFin == null || now.isBefore(DateTime(dateFin!.year, dateFin!.month + 1, 1));
+    return apresDebut && avantFin;
+  }
+
+  factory ChargeFixe.fromMap(Map<String, String> m) => ChargeFixe(
+    id: m['id'] ?? '',
+    label: m['label'] ?? '',
+    montant: double.tryParse(m['montant'] ?? '0') ?? 0,
+    type: TypeTransaction.values.firstWhere((t) => t.name == m['type'], orElse: () => TypeTransaction.autre),
+    bienId: m['bienId']?.isNotEmpty == true ? m['bienId'] : null,
+    dateDebut: DateTime.tryParse(m['dateDebut'] ?? '') ?? DateTime.now(),
+    dateFin: m['dateFin']?.isNotEmpty == true ? DateTime.tryParse(m['dateFin']!) : null,
+  );
+
+  List<String> toRow() => [
+    id, label, montant.toString(), type.name,
+    bienId ?? '', dateDebut.toIso8601String().substring(0, 10),
+    dateFin?.toIso8601String().substring(0, 10) ?? '',
+  ];
+
+  ChargeFixe copyWith({String? label, double? montant, TypeTransaction? type, Object? bienId = _sentinel, DateTime? dateDebut, Object? dateFin = _sentinel}) =>
+    ChargeFixe(
+      id: id, label: label ?? this.label, montant: montant ?? this.montant,
+      type: type ?? this.type,
+      bienId: bienId == _sentinel ? this.bienId : bienId as String?,
+      dateDebut: dateDebut ?? this.dateDebut,
+      dateFin: dateFin == _sentinel ? this.dateFin : dateFin as DateTime?,
+    );
 }

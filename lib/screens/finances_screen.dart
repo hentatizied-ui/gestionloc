@@ -12,53 +12,111 @@ final _dateF = DateFormat('dd MMM yyyy', 'fr_FR');
 // FINANCES
 // ═══════════════════════════════════════════════════════════════
 
-class FinancesScreen extends StatelessWidget {
+class FinancesScreen extends StatefulWidget {
   const FinancesScreen({super.key});
+  @override
+  State<FinancesScreen> createState() => _FinancesScreenState();
+}
+
+class _FinancesScreenState extends State<FinancesScreen> with SingleTickerProviderStateMixin {
+  late final _tab = TabController(length: 3, vsync: this);
+
+  @override
+  void dispose() { _tab.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
     final data = context.watch<DataService>();
-    final txs = data.transactions;
-
     return Scaffold(
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // KPIs
-          Row(children: [
-            Expanded(child: _KpiCard('Revenus (année)', _euro.format(data.revenusAnnee), AppTheme.primary)),
-            const SizedBox(width: 10),
-            Expanded(child: _KpiCard('Charges (année)', _euro.format(data.chargesAnnee), AppTheme.danger)),
-            const SizedBox(width: 10),
-            Expanded(child: _KpiCard('Net', _euro.format(data.revenusAnnee - data.chargesAnnee), AppTheme.blue)),
-          ]),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Transactions', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
-              TextButton.icon(
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Ajouter'),
-                onPressed: () => showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-                  builder: (_) => FormTransaction(data: data),
-                ),
-              ),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(48),
+        child: Container(
+          color: Colors.white,
+          child: TabBar(
+            controller: _tab,
+            labelColor: AppTheme.primary,
+            unselectedLabelColor: Colors.grey[600],
+            indicatorColor: AppTheme.primary,
+            tabs: const [
+              Tab(text: 'Transactions'),
+              Tab(text: 'Bilan'),
+              Tab(text: 'Charges fixes'),
             ],
           ),
-          const SizedBox(height: 8),
-          if (txs.isEmpty)
-            const Center(child: Padding(
-              padding: EdgeInsets.all(32),
-              child: Text('Aucune transaction', style: TextStyle(color: Colors.grey)),
-            ))
-          else
-            ...txs.map((tx) => _TxRow(tx: tx, data: data)),
+        ),
+      ),
+      body: TabBarView(
+        controller: _tab,
+        children: [
+          _TransactionsTab(data: data),
+          _BilanTab(data: data),
+          _ChargesFixesTab(data: data),
         ],
       ),
+      floatingActionButton: AnimatedBuilder(
+        animation: _tab,
+        builder: (_, __) {
+          if (_tab.index == 0) {
+            return FloatingActionButton(
+              heroTag: 'fab_tx',
+              onPressed: () => showModalBottomSheet(
+                context: context, isScrollControlled: true,
+                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                builder: (_) => FormTransaction(data: data),
+              ),
+              backgroundColor: AppTheme.primary,
+              child: const Icon(Icons.add, color: Colors.white),
+            );
+          }
+          if (_tab.index == 2) {
+            return FloatingActionButton(
+              heroTag: 'fab_cf',
+              onPressed: () => showModalBottomSheet(
+                context: context, isScrollControlled: true,
+                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                builder: (_) => FormChargeFixe(data: data),
+              ),
+              backgroundColor: AppTheme.primary,
+              child: const Icon(Icons.add, color: Colors.white),
+            );
+          }
+          return const SizedBox.shrink();
+        },
+      ),
+    );
+  }
+}
+
+// ─── TRANSACTIONS ──────────────────────────────────────────────────────────
+
+class _TransactionsTab extends StatelessWidget {
+  final DataService data;
+  const _TransactionsTab({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final txs = data.transactions;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(children: [
+          Expanded(child: _KpiCard('Revenus (année)', _euro.format(data.revenusAnnee), AppTheme.primary)),
+          const SizedBox(width: 10),
+          Expanded(child: _KpiCard('Charges (année)', _euro.format(data.chargesAnnee), AppTheme.danger)),
+          const SizedBox(width: 10),
+          Expanded(child: _KpiCard('Net', _euro.format(data.revenusAnnee - data.chargesAnnee), AppTheme.blue)),
+        ]),
+        const SizedBox(height: 20),
+        const Text('Transactions', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
+        const SizedBox(height: 8),
+        if (txs.isEmpty)
+          const Center(child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Text('Aucune transaction', style: TextStyle(color: Colors.grey)),
+          ))
+        else
+          ...txs.map((tx) => _TxRow(tx: tx, data: data)),
+      ],
     );
   }
 }
@@ -87,9 +145,19 @@ class _TxRow extends StatelessWidget {
   final DataService data;
   const _TxRow({required this.tx, required this.data});
 
+  String _icon(TypeTransaction t) {
+    switch (t) {
+      case TypeTransaction.loyer: return '💰';
+      case TypeTransaction.reparation: return '🔧';
+      case TypeTransaction.assurance: return '📋';
+      case TypeTransaction.taxe: return '🏛';
+      case TypeTransaction.charge: return '⚡';
+      default: return '💳';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final icon = _icon(tx.type);
     final bien = data.getBienById(tx.bienId);
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -102,44 +170,558 @@ class _TxRow extends StatelessWidget {
               color: tx.isRecette ? const Color(0xFFE1F5EE) : const Color(0xFFFCEBEB),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Center(child: Text(icon, style: const TextStyle(fontSize: 16))),
+            child: Center(child: Text(_icon(tx.type), style: const TextStyle(fontSize: 16))),
           ),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(tx.label, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
-            Text(
-              '${bien?.nom ?? ''} · ${_dateF.format(tx.date)}',
-              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-            ),
+            Text('${bien?.nom ?? ''} · ${_dateF.format(tx.date)}',
+                style: TextStyle(fontSize: 11, color: Colors.grey[600])),
           ])),
-          Text(
-            (tx.isRecette ? '+' : '-') + _euro.format(tx.montant.abs()),
-            style: TextStyle(
-              fontWeight: FontWeight.w500, fontSize: 14,
-              color: tx.isRecette ? AppTheme.primary : AppTheme.danger,
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(
+              (tx.isRecette ? '+' : '-') + _euro.format(tx.montant.abs()),
+              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14,
+                  color: tx.isRecette ? AppTheme.primary : AppTheme.danger),
             ),
+            InkWell(
+              onTap: () => data.supprimerTransaction(tx.id),
+              child: const Icon(Icons.delete_outline, size: 14, color: Colors.grey),
+            ),
+          ]),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─── BILAN ─────────────────────────────────────────────────────────────────
+
+class _BilanTab extends StatefulWidget {
+  final DataService data;
+  const _BilanTab({required this.data});
+  @override
+  State<_BilanTab> createState() => _BilanTabState();
+}
+
+class _BilanTabState extends State<_BilanTab> {
+  int _annee = DateTime.now().year;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = widget.data;
+    double totalRevenus = 0, totalCharges = 0;
+    final bilansBiens = <Map<String, dynamic>>[];
+
+    for (final bien in data.biens) {
+      final txs = data.getTransactionsDuBien(bien.id).where((t) => t.date.year == _annee).toList();
+      final revenus = txs.where((t) => t.isRecette).fold<double>(0, (s, t) => s + t.montant);
+      final charges = txs.where((t) => !t.isRecette).fold<double>(0, (s, t) => s + t.montant.abs());
+      totalRevenus += revenus;
+      totalCharges += charges;
+      bilansBiens.add({'bien': bien, 'revenus': revenus, 'charges': charges, 'net': revenus - charges, 'txCount': txs.length});
+    }
+
+    final txsSansBien = data.transactions.where((t) => t.date.year == _annee && (t.bienId == null || t.bienId!.isEmpty)).toList();
+    final revSansBien = txsSansBien.where((t) => t.isRecette).fold<double>(0, (s, t) => s + t.montant);
+    final chgSansBien = txsSansBien.where((t) => !t.isRecette).fold<double>(0, (s, t) => s + t.montant.abs());
+    totalRevenus += revSansBien;
+    totalCharges += chgSansBien;
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          IconButton(icon: const Icon(Icons.chevron_left), onPressed: () => setState(() => _annee--)),
+          Text('$_annee', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+          IconButton(icon: const Icon(Icons.chevron_right), onPressed: () => setState(() => _annee++)),
+        ]),
+        const SizedBox(height: 8),
+        _BilanGlobalCard(revenus: totalRevenus, charges: totalCharges),
+        const SizedBox(height: 20),
+        const Text('Bilan par bien', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
+        const SizedBox(height: 10),
+        ...bilansBiens.map((b) => _BilanBienCard(
+          bien: b['bien'] as Bien, revenus: b['revenus'] as double,
+          charges: b['charges'] as double, net: b['net'] as double,
+          txCount: b['txCount'] as int, annee: _annee, data: data,
+        )),
+        if (revSansBien > 0 || chgSansBien > 0) ...[
+          const SizedBox(height: 8),
+          _BilanSansBienCard(revenus: revSansBien, charges: chgSansBien),
+        ],
+      ],
+    );
+  }
+}
+
+class _BilanGlobalCard extends StatelessWidget {
+  final double revenus, charges;
+  const _BilanGlobalCard({required this.revenus, required this.charges});
+
+  @override
+  Widget build(BuildContext context) {
+    final net = revenus - charges;
+    final taux = revenus > 0 ? (charges / revenus * 100) : 0.0;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [AppTheme.primary, AppTheme.primaryDark], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Bilan global', style: TextStyle(color: Colors.white70, fontSize: 13)),
+        const SizedBox(height: 8),
+        Text(_euro.format(net), style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w500)),
+        Text('résultat net', style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12)),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: _BStat('Revenus', _euro.format(revenus), Colors.white)),
+          Expanded(child: _BStat('Charges', _euro.format(charges), Colors.orangeAccent)),
+          Expanded(child: _BStat('Taux charge', '${taux.toStringAsFixed(0)}%', Colors.white70)),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _BStat extends StatelessWidget {
+  final String label, value;
+  final Color color;
+  const _BStat(this.label, this.value, this.color);
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11)),
+      Text(value, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w500)),
+    ]);
+  }
+}
+
+class _BilanBienCard extends StatefulWidget {
+  final Bien bien;
+  final double revenus, charges, net;
+  final int txCount, annee;
+  final DataService data;
+  const _BilanBienCard({required this.bien, required this.revenus, required this.charges, required this.net, required this.txCount, required this.annee, required this.data});
+  @override
+  State<_BilanBienCard> createState() => _BilanBienCardState();
+}
+
+class _BilanBienCardState extends State<_BilanBienCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isPos = widget.net >= 0;
+    final txs = widget.data.getTransactionsDuBien(widget.bien.id).where((t) => t.date.year == widget.annee).toList();
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Column(children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(color: isPos ? AppTheme.primaryLight : const Color(0xFFFCEBEB), borderRadius: BorderRadius.circular(10)),
+                child: Icon(Icons.home_outlined, size: 20, color: isPos ? AppTheme.primary : AppTheme.danger),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(widget.bien.nom, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+                Text('${widget.txCount} transaction(s)', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              ])),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text(_euro.format(widget.net), style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: isPos ? AppTheme.primary : AppTheme.danger)),
+                Text('net', style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+              ]),
+              const SizedBox(width: 8),
+              Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.grey),
+            ]),
+          ),
+        ),
+        if (_expanded) ...[
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(children: [
+              Row(children: [
+                Expanded(child: _MiniKpi('Revenus', _euro.format(widget.revenus), AppTheme.primary)),
+                const SizedBox(width: 8),
+                Expanded(child: _MiniKpi('Charges', _euro.format(widget.charges), AppTheme.danger)),
+                const SizedBox(width: 8),
+                Expanded(child: _MiniKpi('Net', _euro.format(widget.net), isPos ? AppTheme.primary : AppTheme.danger)),
+              ]),
+              const SizedBox(height: 12),
+              if (txs.isEmpty)
+                Text('Aucune transaction', style: TextStyle(fontSize: 12, color: Colors.grey[500]))
+              else
+                ...txs.map((tx) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(children: [
+                    const SizedBox(width: 4),
+                    Expanded(child: Text(tx.label, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)),
+                    Text(
+                      (tx.isRecette ? '+' : '-') + _euro.format(tx.montant.abs()),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: tx.isRecette ? AppTheme.primary : AppTheme.danger),
+                    ),
+                  ]),
+                )),
+            ]),
+          ),
+        ],
+      ]),
+    );
+  }
+}
+
+class _MiniKpi extends StatelessWidget {
+  final String label, value;
+  final Color color;
+  const _MiniKpi(this.label, this.value, this.color);
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(8)),
+      child: Column(children: [
+        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+        const SizedBox(height: 2),
+        Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: color)),
+      ]),
+    );
+  }
+}
+
+class _BilanSansBienCard extends StatelessWidget {
+  final double revenus, charges;
+  const _BilanSansBienCard({required this.revenus, required this.charges});
+  @override
+  Widget build(BuildContext context) {
+    final net = revenus - charges;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(children: [
+          Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.receipt_outlined, size: 20, color: Colors.grey),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Charges générales', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+            const Text('Non rattachées à un bien', style: TextStyle(fontSize: 11, color: Colors.grey)),
+          ])),
+          Text(_euro.format(net), style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14,
+              color: net >= 0 ? AppTheme.primary : AppTheme.danger)),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─── CHARGES FIXES ─────────────────────────────────────────────────────────
+
+class _ChargesFixesTab extends StatelessWidget {
+  final DataService data;
+  const _ChargesFixesTab({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final charges = data.chargesFixes;
+    if (charges.isEmpty) {
+      return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const Icon(Icons.repeat, size: 48, color: Colors.grey),
+        const SizedBox(height: 12),
+        Text('Aucune charge fixe', style: TextStyle(color: Colors.grey[600])),
+        const SizedBox(height: 6),
+        Text('Ajoutez vos crédits, assurances...', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+      ]));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: charges.length,
+      itemBuilder: (_, i) => _ChargeFixeRow(cf: charges[i], data: data),
+    );
+  }
+}
+
+class _ChargeFixeRow extends StatelessWidget {
+  final ChargeFixe cf;
+  final DataService data;
+  const _ChargeFixeRow({required this.cf, required this.data});
+
+  String _icon(TypeTransaction t) {
+    switch (t) {
+      case TypeTransaction.charge: return '⚡';
+      case TypeTransaction.assurance: return '📋';
+      case TypeTransaction.taxe: return '🏛';
+      default: return '💳';
+    }
+  }
+
+  String _datesCf(ChargeFixe cf) {
+    final fmt = DateFormat('MM/yyyy', 'fr_FR');
+    final debut = fmt.format(cf.dateDebut);
+    if (cf.dateFin == null) return 'Depuis $debut · sans fin';
+    return '$debut → \${fmt.format(cf.dateFin!)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bien = data.getBienById(cf.bienId);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(children: [
+          Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              color: cf.actif ? const Color(0xFFFCEBEB) : Colors.grey[100],
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Center(child: Text(_icon(cf.type), style: const TextStyle(fontSize: 18))),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(cf.label, style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13,
+                color: cf.actif ? Colors.black : Colors.grey)),
+            Text(bien != null ? bien.nom : 'Charge globale',
+                style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+            Text(_datesCf(cf), style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+          ])),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('-${_euro.format(cf.montant)}/mois',
+                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13,
+                    color: cf.actif ? AppTheme.danger : Colors.grey)),
+            const SizedBox(height: 4),
+
+          ]),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.grey),
+            onPressed: () => showModalBottomSheet(
+              context: context, isScrollControlled: true,
+              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+              builder: (_) => FormChargeFixe(data: data, charge: cf),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 18, color: Colors.grey),
+            onPressed: () => data.supprimerChargeFixe(cf.id),
           ),
         ]),
       ),
     );
   }
+}
 
-  String _icon(TypeTransaction t) {
-    switch (t) {
-      case TypeTransaction.loyer: return '💰';
-      case TypeTransaction.reparation: return '🔧';
-      case TypeTransaction.assurance: return '📋';
-      case TypeTransaction.taxe: return '🏛';
-      case TypeTransaction.charge: return '⚡';
-      default: return '💳';
+class FormChargeFixe extends StatefulWidget {
+  final DataService data;
+  final ChargeFixe? charge;
+  const FormChargeFixe({super.key, required this.data, this.charge});
+  @override
+  State<FormChargeFixe> createState() => _FormChargeFixeState();
+}
+
+class _FormChargeFixeState extends State<FormChargeFixe> {
+  final _key = GlobalKey<FormState>();
+  late final _label = TextEditingController(text: widget.charge?.label ?? '');
+  late final _montant = TextEditingController(text: widget.charge != null ? widget.charge!.montant.toString() : '');
+  late TypeTransaction _type = widget.charge?.type ?? TypeTransaction.charge;
+  late String? _bienId = widget.charge?.bienId;
+  late DateTime _dateDebut = widget.charge?.dateDebut ?? DateTime.now();
+  late DateTime? _dateFin = widget.charge?.dateFin;
+  bool _saving = false;
+
+  bool get _isEdit => widget.charge != null;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        expand: false,
+        builder: (_, ctrl) => Form(
+          key: _key,
+          child: ListView(
+            controller: ctrl,
+            padding: const EdgeInsets.all(20),
+            children: [
+              Center(child: Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
+              Text(_isEdit ? 'Modifier la charge' : 'Charge fixe mensuelle', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 6),
+              Text('Générée automatiquement le 1er de chaque mois',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _label,
+                decoration: _deco('Libellé (ex: Crédit BNP, Assurance PNO)'),
+                validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _montant,
+                keyboardType: TextInputType.number,
+                decoration: _deco('Mensualité (€)'),
+                validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+              ),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<TypeTransaction>(
+                value: _type,
+                decoration: _deco('Catégorie'),
+                items: [TypeTransaction.charge, TypeTransaction.assurance, TypeTransaction.taxe, TypeTransaction.autre]
+                    .map((t) => DropdownMenuItem(value: t, child: Text(t.name))).toList(),
+                onChanged: (v) => setState(() => _type = v!),
+              ),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<String?>(
+                value: _bienId,
+                decoration: _deco('Bien concerné (optionnel)'),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('Global (tous les biens)')),
+                  ...widget.data.biens.map((b) => DropdownMenuItem(value: b.id, child: Text(b.nom))),
+                ],
+                onChanged: (v) => setState(() => _bienId = v),
+              ),
+              const SizedBox(height: 14),
+              // Période
+              Row(children: [
+                Expanded(child: _DatePickerCF(
+                  label: 'Début',
+                  date: _dateDebut,
+                  onPick: (d) { if (d != null) setState(() => _dateDebut = d); },
+                )),
+                const SizedBox(width: 12),
+                Expanded(child: _DatePickerCF(
+                  label: 'Fin (optionnel)',
+                  date: _dateFin,
+                  onPick: (d) => setState(() => _dateFin = d),
+                  nullable: true,
+                )),
+              ]),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _saving ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary, foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0,
+                ),
+                child: _saving
+                    ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                    : Text(_isEdit ? 'Enregistrer' : 'Ajouter'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _save() async {
+    if (!_key.currentState!.validate()) return;
+    setState(() => _saving = true);
+    if (_isEdit) {
+      await widget.data.modifierChargeFixe(widget.charge!.copyWith(
+        label: _label.text,
+        montant: double.tryParse(_montant.text) ?? 0,
+        type: _type,
+        bienId: _bienId,
+        dateDebut: _dateDebut,
+        dateFin: _dateFin,
+      ));
+    } else {
+      await widget.data.ajouterChargeFixe(widget.data.nouvChargeFixe(
+        label: _label.text,
+        montant: double.tryParse(_montant.text) ?? 0,
+        type: _type,
+        bienId: _bienId,
+        dateDebut: _dateDebut,
+        dateFin: _dateFin,
+      ));
     }
+    if (mounted) Navigator.pop(context);
+  }
+
+  InputDecoration _deco(String label) => InputDecoration(
+    labelText: label,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+  );
+}
+
+// ─── DATE PICKER CHARGE FIXE ──────────────────────────────────────────────
+
+class _DatePickerCF extends StatelessWidget {
+  final String label;
+  final DateTime? date;
+  final ValueChanged<DateTime?> onPick;
+  final bool nullable;
+  const _DatePickerCF({required this.label, required this.date, required this.onPick, this.nullable = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = DateFormat('MM/yyyy', 'fr_FR');
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () async {
+        if (nullable && date != null) {
+          showDialog(context: context, builder: (_) => AlertDialog(
+            title: Text(label),
+            actions: [
+              TextButton(onPressed: () { Navigator.pop(context); onPick(null); }, child: const Text('Supprimer la date')),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  final picked = await showDatePicker(context: context,
+                    initialDate: date!, firstDate: DateTime(2000), lastDate: DateTime(2050));
+                  if (picked != null) onPick(picked);
+                },
+                child: const Text('Choisir une date'),
+              ),
+            ],
+          ));
+        } else {
+          final picked = await showDatePicker(context: context,
+            initialDate: date ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2050));
+          if (picked != null) onPick(picked);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey[400]!),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(children: [
+          const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
+          const SizedBox(width: 8),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+            const SizedBox(height: 2),
+            Text(date != null ? fmt.format(date!) : 'Sans fin',
+                style: TextStyle(fontSize: 13, fontWeight: date != null ? FontWeight.w500 : FontWeight.normal,
+                    color: date != null ? Colors.black : Colors.grey)),
+          ])),
+        ]),
+      ),
+    );
   }
 }
+
+// ─── FORMULAIRE TRANSACTION ────────────────────────────────────────────────
 
 class FormTransaction extends StatefulWidget {
   final DataService data;
   const FormTransaction({super.key, required this.data});
-
   @override
   State<FormTransaction> createState() => _FormTransactionState();
 }
@@ -150,6 +732,7 @@ class _FormTransactionState extends State<FormTransaction> {
   final _montant = TextEditingController();
   TypeTransaction _type = TypeTransaction.loyer;
   String? _bienId;
+  String? _immeubleId;
   bool _isRecette = true;
   bool _saving = false;
 
@@ -192,17 +775,28 @@ class _FormTransactionState extends State<FormTransaction> {
               DropdownButtonFormField<TypeTransaction>(
                 value: _type,
                 decoration: _deco('Catégorie'),
-                items: TypeTransaction.values.map((t) =>
-                    DropdownMenuItem(value: t, child: Text(t.name))).toList(),
+                items: TypeTransaction.values.map((t) => DropdownMenuItem(value: t, child: Text(t.name))).toList(),
                 onChanged: (v) => setState(() => _type = v!),
               ),
               const SizedBox(height: 14),
-              DropdownButtonFormField<String>(
+              DropdownButtonFormField<String?>(
                 value: _bienId,
                 decoration: _deco('Bien concerné (optionnel)'),
-                items: widget.data.biens.map((b) =>
-                    DropdownMenuItem(value: b.id, child: Text(b.nom))).toList(),
-                onChanged: (v) => setState(() => _bienId = v),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('Aucun')),
+                  ...widget.data.biens.map((b) => DropdownMenuItem(value: b.id, child: Text(b.nom))),
+                ],
+                onChanged: (v) => setState(() { _bienId = v; if (v != null) _immeubleId = null; }),
+              ),
+              const SizedBox(height: 14),
+              if (_bienId == null) DropdownButtonFormField<String?>(
+                value: _immeubleId,
+                decoration: _deco("Charge commune d'immeuble (optionnel)"),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('Aucun')),
+                  ...widget.data.immeubles.map((i) => DropdownMenuItem(value: i.id, child: Text(i.nom))),
+                ],
+                onChanged: (v) => setState(() => _immeubleId = v),
               ),
               const SizedBox(height: 20),
               ElevatedButton(
@@ -211,8 +805,7 @@ class _FormTransactionState extends State<FormTransaction> {
                   backgroundColor: _isRecette ? AppTheme.primary : AppTheme.danger,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0,
                 ),
                 child: _saving
                     ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
@@ -230,7 +823,7 @@ class _FormTransactionState extends State<FormTransaction> {
     setState(() => _saving = true);
     final montant = (double.tryParse(_montant.text) ?? 0) * (_isRecette ? 1 : -1);
     await widget.data.ajouterTransaction(widget.data.nouvTransaction(
-      label: _label.text, montant: montant, type: _type, bienId: _bienId,
+      label: _label.text, montant: montant, type: _type, bienId: _bienId, immeubleId: _immeubleId,
     ));
     if (mounted) Navigator.pop(context);
   }
@@ -260,8 +853,7 @@ class _TypeBtn extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: active ? color : Colors.grey[300]!),
         ),
-        child: Text(label,
-            textAlign: TextAlign.center,
+        child: Text(label, textAlign: TextAlign.center,
             style: TextStyle(fontWeight: FontWeight.w500, color: active ? color : Colors.grey[600])),
       ),
     );
@@ -274,7 +866,6 @@ class _TypeBtn extends StatelessWidget {
 
 class MaintenanceScreen extends StatefulWidget {
   const MaintenanceScreen({super.key});
-
   @override
   State<MaintenanceScreen> createState() => _MaintenanceScreenState();
 }
@@ -293,25 +884,22 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
     }).toList();
 
     return Scaffold(
-      body: Column(
-        children: [
-          _FilterBar(filtre: _filtre, onChanged: (f) => setState(() => _filtre = f), data: data),
-          Expanded(
-            child: tickets.isEmpty
-                ? const Center(child: Text('Aucun ticket'))
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: tickets.length,
-                    itemBuilder: (_, i) => _TicketCard(ticket: tickets[i], data: data),
-                  ),
-          ),
-        ],
-      ),
+      body: Column(children: [
+        _FilterBar(filtre: _filtre, onChanged: (f) => setState(() => _filtre = f), data: data),
+        Expanded(
+          child: tickets.isEmpty
+              ? const Center(child: Text('Aucun ticket'))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: tickets.length,
+                  itemBuilder: (_, i) => _TicketCard(ticket: tickets[i], data: data),
+                ),
+        ),
+      ]),
       floatingActionButton: FloatingActionButton(
-        heroTag: "fab_finances",
+        heroTag: 'fab_maintenance',
         onPressed: () => showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
+          context: context, isScrollControlled: true,
           shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
           builder: (_) => FormTicket(data: data),
         ),
@@ -370,10 +958,8 @@ class _Chip extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: active ? AppTheme.primary : Colors.grey[300]!, width: 0.5),
         ),
-        child: Text(label, style: TextStyle(
-          fontSize: 12, fontWeight: FontWeight.w500,
-          color: active ? AppTheme.primaryDark : Colors.grey[600],
-        )),
+        child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+            color: active ? AppTheme.primaryDark : Colors.grey[600])),
       ),
     );
   }
@@ -407,52 +993,41 @@ class _TicketCard extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: IntrinsicHeight(
-        child: Row(
-          children: [
-            Container(width: 4, decoration: BoxDecoration(
-              color: _prioColor,
-              borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
-            )),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(children: [
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(ticket.titre, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${bien?.nom ?? ticket.bienId} · ${_dateF.format(ticket.dateCreation)}',
-                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                    ),
-                    if (ticket.rapportePar != null) ...[
-                      const SizedBox(height: 2),
-                      Text('Signalé par ${ticket.rapportePar}',
-                          style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-                    ],
-                  ])),
-                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: _prioColor.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(_statutLabel,
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: _prioColor)),
-                    ),
-                    const SizedBox(height: 8),
-                    PopupMenuButton<StatutTicket>(
-                      icon: const Icon(Icons.more_vert, size: 18, color: Colors.grey),
-                      itemBuilder: (_) => StatutTicket.values.map((s) =>
-                          PopupMenuItem(value: s, child: Text(s.name))).toList(),
-                      onSelected: (s) => data.modifierStatutTicket(ticket.id, s),
-                    ),
-                  ]),
-                ]),
-              ),
-            ),
-          ],
-        ),
+        child: Row(children: [
+          Container(width: 4, decoration: BoxDecoration(
+            color: _prioColor,
+            borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+          )),
+          Expanded(child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(children: [
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(ticket.titre, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+                const SizedBox(height: 3),
+                Text('${bien?.nom ?? ticket.bienId} · ${_dateF.format(ticket.dateCreation)}',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                if (ticket.rapportePar != null) ...[
+                  const SizedBox(height: 2),
+                  Text('Signalé par ${ticket.rapportePar}', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                ],
+              ])),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: _prioColor.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+                  child: Text(_statutLabel, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: _prioColor)),
+                ),
+                const SizedBox(height: 8),
+                PopupMenuButton<StatutTicket>(
+                  icon: const Icon(Icons.more_vert, size: 18, color: Colors.grey),
+                  itemBuilder: (_) => StatutTicket.values.map((s) =>
+                      PopupMenuItem(value: s, child: Text(s.name))).toList(),
+                  onSelected: (s) => data.modifierStatutTicket(ticket.id, s),
+                ),
+              ]),
+            ]),
+          )),
+        ]),
       ),
     );
   }
@@ -461,7 +1036,6 @@ class _TicketCard extends StatelessWidget {
 class FormTicket extends StatefulWidget {
   final DataService data;
   const FormTicket({super.key, required this.data});
-
   @override
   State<FormTicket> createState() => _FormTicketState();
 }
@@ -498,8 +1072,7 @@ class _FormTicketState extends State<FormTicket> {
               DropdownButtonFormField<String>(
                 value: _bienId,
                 decoration: _deco('Bien concerné'),
-                items: widget.data.biens.map((b) =>
-                    DropdownMenuItem(value: b.id, child: Text(b.nom))).toList(),
+                items: widget.data.biens.map((b) => DropdownMenuItem(value: b.id, child: Text(b.nom))).toList(),
                 validator: (v) => v == null ? 'Requis' : null,
                 onChanged: (v) => setState(() => _bienId = v),
               ),
@@ -507,19 +1080,16 @@ class _FormTicketState extends State<FormTicket> {
               DropdownButtonFormField<PrioriteTicket>(
                 value: _priorite,
                 decoration: _deco('Priorité'),
-                items: PrioriteTicket.values.map((p) =>
-                    DropdownMenuItem(value: p, child: Text(p.name))).toList(),
+                items: PrioriteTicket.values.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
                 onChanged: (v) => setState(() => _priorite = v!),
               ),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _saving ? null : _save,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: Colors.white,
+                  backgroundColor: AppTheme.primary, foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0,
                 ),
                 child: _saving
                     ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
@@ -536,10 +1106,8 @@ class _FormTicketState extends State<FormTicket> {
     if (!_key.currentState!.validate()) return;
     setState(() => _saving = true);
     await widget.data.ajouterTicket(widget.data.nouvTicket(
-      titre: _titre.text,
-      description: _desc.text,
-      bienId: _bienId!,
-      priorite: _priorite,
+      titre: _titre.text, description: _desc.text,
+      bienId: _bienId!, priorite: _priorite,
       rapportePar: _rapporte.text.isNotEmpty ? _rapporte.text : null,
     ));
     if (mounted) Navigator.pop(context);
@@ -563,13 +1131,10 @@ class _TF extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: TextFormField(
-        controller: ctrl,
-        maxLines: maxLines,
-        decoration: InputDecoration(
-          labelText: label,
+        controller: ctrl, maxLines: maxLines,
+        decoration: InputDecoration(labelText: label,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12)),
         validator: (v) => v == null || v.isEmpty ? 'Champ requis' : null,
       ),
     );

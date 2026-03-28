@@ -19,7 +19,7 @@ class PdfService {
   }) async {
     final pdf = pw.Document();
 
-    final sig1Bytes = await rootBundle.load('assets/images/signature_saafi.jpg');
+    final sig1Bytes = await rootBundle.load('assets/images/signature_saafi.png');
     final sig2Bytes = await rootBundle.load('assets/images/signature_hentati.jpg');
     final sig1 = pw.MemoryImage(sig1Bytes.buffer.asUint8List());
     final sig2 = pw.MemoryImage(sig2Bytes.buffer.asUint8List());
@@ -82,14 +82,14 @@ class PdfService {
             pw.SizedBox(height: 14),
 
             // Adresse
-            pw.Text('Adresse du Bien loué :',
+            pw.Text('Adresse de l\'appartement loue :',
                 style: pw.TextStyle(font: fontBold, fontSize: 11, decoration: pw.TextDecoration.underline)),
             pw.SizedBox(height: 3),
             pw.Text('  - ' + adresse, style: styleNormal),
             if (bien.etage != null && bien.etage!.isNotEmpty)
-              pw.Text('     Etage : ' + bien.etage!, style: styleNormal),
+              pw.Text('  - Etage : ' + bien.etage!, style: styleNormal),
             if (bien.numero != null && bien.numero!.isNotEmpty)
-              pw.Text('     Appartement N°' + bien.numero!, style: styleNormal),
+              pw.Text('  - Appartement N : ' + bien.numero!, style: styleNormal),
             pw.SizedBox(height: 14),
 
             // Corps
@@ -197,4 +197,111 @@ class PdfService {
         ? _montantEnLettres(k.toDouble()) + ' mille'
         : _montantEnLettres(k.toDouble()) + ' mille ' + _montantEnLettres(r.toDouble());
   }
+
+  static Future<Uint8List> genererBilanCompta({
+    required dynamic data,
+    required int annee,
+  }) async {
+    final pdf = pw.Document();
+    final font = await PdfGoogleFonts.nunitoRegular();
+    final fontBold = await PdfGoogleFonts.nunitoBold();
+
+    final styleNormal = pw.TextStyle(font: font, fontSize: 11);
+    final styleBold = pw.TextStyle(font: fontBold, fontSize: 11);
+    final styleTitle = pw.TextStyle(font: fontBold, fontSize: 14);
+    final styleSmall = pw.TextStyle(font: font, fontSize: 9, color: PdfColors.grey700);
+
+    // Calculs
+    final txs = (data.transactions as List<Transaction>).where((t) => t.date.year == annee).toList();
+    double loyers = 0, chargesRec = 0, reparations = 0, assurances = 0, taxes = 0, autres = 0;
+    for (final t in txs) {
+      if (t.montant > 0) {
+        if (t.type == TypeTransaction.loyer) loyers += t.montant;
+        else chargesRec += t.montant;
+      } else {
+        final m = t.montant.abs();
+        switch (t.type) {
+          case TypeTransaction.reparation: reparations += m; break;
+          case TypeTransaction.assurance: assurances += m; break;
+          case TypeTransaction.taxe: taxes += m; break;
+          default: autres += m;
+        }
+      }
+    }
+    taxes += (data.biens as List<Bien>).fold<double>(0, (s, b) => s + b.taxeFonciere);
+    final cfMontant = (data.chargesFixes as List<ChargeFixe>).where((cf) => cf.actif).fold<double>(0, (s, cf) => s + cf.montant * 12);
+    final totalRev = loyers + chargesRec;
+    final totalChg = reparations + assurances + taxes + autres + cfMontant;
+    final net = totalRev - totalChg;
+
+    final euro = NumberFormat.currency(locale: 'fr_FR', symbol: 'EUR', decimalDigits: 0);
+
+    pdf.addPage(pw.Page(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.symmetric(horizontal: 50, vertical: 40),
+      build: (ctx) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.Center(child: pw.Text('BILAN COMPTABLE $annee', style: styleTitle)),
+        pw.SizedBox(height: 4),
+        pw.Center(child: pw.Text('Généré le ${DateFormat('dd/MM/yyyy').format(DateTime.now())}', style: styleSmall)),
+        pw.SizedBox(height: 24),
+
+        pw.Text('COMPTE DE RESULTAT', style: styleBold),
+        pw.SizedBox(height: 8),
+        pw.Divider(),
+        _bilanLigne('Loyers encaissés', loyers, true, styleNormal, styleBold, euro),
+        _bilanLigne('Charges récupérées', chargesRec, true, styleNormal, styleBold, euro),
+        pw.Divider(),
+        _bilanLigne('TOTAL REVENUS', totalRev, true, styleBold, styleBold, euro),
+        pw.SizedBox(height: 8),
+        _bilanLigne('Charges fixes (crédit, assurance)', cfMontant, false, styleNormal, styleBold, euro),
+        _bilanLigne('Entretien et réparations', reparations, false, styleNormal, styleBold, euro),
+        _bilanLigne('Assurances', assurances, false, styleNormal, styleBold, euro),
+        _bilanLigne('Taxes foncières', taxes, false, styleNormal, styleBold, euro),
+        _bilanLigne('Autres charges', autres, false, styleNormal, styleBold, euro),
+        pw.Divider(),
+        _bilanLigne('TOTAL CHARGES', totalChg, false, styleBold, styleBold, euro),
+        pw.SizedBox(height: 12),
+        pw.Container(
+          padding: const pw.EdgeInsets.all(12),
+          decoration: pw.BoxDecoration(color: PdfColors.green50, border: pw.Border.all(color: PdfColors.green)),
+          child: _bilanLigne('RESULTAT NET', net, net >= 0, styleBold, styleBold, euro),
+        ),
+        pw.SizedBox(height: 24),
+
+        pw.Text('DETAIL PAR BIEN', style: styleBold),
+        pw.SizedBox(height: 8),
+        pw.Divider(),
+        ...(data.biens as List<Bien>).map((b) {
+          final bTxs = (data.transactions as List<Transaction>).where((t) => t.bienId == b.id && t.date.year == annee).toList();
+          final bRev = bTxs.where((t) => t.montant > 0).fold<double>(0, (s, t) => s + t.montant);
+          final bChg = bTxs.where((t) => t.montant < 0).fold<double>(0, (s, t) => s + t.montant.abs()) + b.taxeFonciere;
+          final bNet = bRev - bChg;
+          final prixAchat = b.prixAchat;
+          final rdt = prixAchat > 0 ? (bNet / prixAchat * 100) : 0.0;
+          final rdtStr = prixAchat > 0 ? ' | Rdt: ' + rdt.toStringAsFixed(1) + '%' : '';
+          final details = 'Rev: ' + euro.format(bRev) + ' | Chg: ' + euro.format(bChg) + ' | Net: ' + euro.format(bNet) + rdtStr;
+          return pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 6),
+            child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+              pw.Text(b.nom, style: styleNormal),
+              pw.Text(details, style: styleSmall),
+            ]),
+          );
+        }).toList(),
+      ]),
+    ));
+
+    return pdf.save();
+  }
+
+  static pw.Widget _bilanLigne(String label, double value, bool isPos, pw.TextStyle style, pw.TextStyle bold, NumberFormat euro) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 3),
+      child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+        pw.Text(label, style: style),
+        pw.Text((isPos ? '+' : '-') + euro.format(value.abs()), style: bold),
+      ]),
+    );
+  }
+
 }

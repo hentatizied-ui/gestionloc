@@ -226,8 +226,8 @@ class _ImmeubleHeader extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(color: AppTheme.primary, borderRadius: BorderRadius.circular(20)),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Text('$nbBiens apt.', style: const TextStyle(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 6),
+              Text('$nbBiens apt.', style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w500)),
+              const SizedBox(width: 4),
               Icon(isCollapsed ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up, size: 14, color: Colors.white),
             ]),
           ),
@@ -472,11 +472,23 @@ class _FormBienState extends State<FormBien> {
   late final _surface = TextEditingController(text: widget.bien?.surface.toString());
   late final _loyer = TextEditingController(text: widget.bien?.loyerMensuel.toString());
   late final _charges = TextEditingController(text: widget.bien?.charges.toString());
+  late final _prixAchat = TextEditingController(text: widget.bien != null && widget.bien!.prixAchat > 0 ? widget.bien!.prixAchat.toString() : '');
+  late final _taxeFonciere = TextEditingController(text: widget.bien != null && widget.bien!.taxeFonciere > 0 ? widget.bien!.taxeFonciere.toString() : '');
   late final _numero = TextEditingController(text: widget.bien?.numero ?? '');
   late int _pieces = widget.bien?.pieces ?? 2;
   late String _type = widget.bien?.type ?? 'appartement';
   late String? _immeubleId = widget.bien?.immeubleId;
-  late String? _etageVal = widget.bien?.etage;
+  late String? _etageVal = _etageCodeToLabel(widget.bien?.etage);
+
+  static String? _etageCodeToLabel(String? code) {
+    if (code == null || code.isEmpty) return null;
+    const etages = ['RDC', '1er Étage', '2ème Étage', '3ème Étage', '4ème Étage',
+      '5ème Étage', '6ème Étage', '7ème Étage', '8ème Étage', '9ème Étage', '10ème Étage'];
+    final idx = int.tryParse(code);
+    if (idx == null) return null;
+    if (idx < etages.length) return etages[idx];
+    return null;
+  }
   bool _saving = false;
 
   // Liste des étages
@@ -562,7 +574,7 @@ class _FormBienState extends State<FormBien> {
               DropdownButtonFormField<String>(
                 value: _type,
                 decoration: _deco('Type de bien'),
-                items: ['appartement', 'studio', 'maison', 'loft']
+                items: ['appartement', 'studio', 'maison', 'loft', 'local commercial']
                     .map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
                 onChanged: (v) {
                   setState(() {
@@ -642,6 +654,14 @@ class _FormBienState extends State<FormBien> {
                 const SizedBox(width: 12),
                 Expanded(child: _Field(ctrl: _charges, label: 'Charges (€)', keyboard: TextInputType.number)),
               ]),
+              const Divider(height: 24),
+              const Text('Données financières', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey)),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(child: _Field(ctrl: _prixAchat, label: "Prix d'achat (€)", keyboard: TextInputType.number, required: false)),
+                const SizedBox(width: 12),
+                Expanded(child: _Field(ctrl: _taxeFonciere, label: 'Taxe foncière/an (€)', keyboard: TextInputType.number, required: false)),
+              ]),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _saving ? null : _save,
@@ -682,6 +702,8 @@ class _FormBienState extends State<FormBien> {
         surface: double.tryParse(_surface.text) ?? 0,
         loyerMensuel: double.tryParse(_loyer.text) ?? 0,
         charges: double.tryParse(_charges.text) ?? 0,
+        prixAchat: double.tryParse(_prixAchat.text) ?? 0,
+        taxeFonciere: double.tryParse(_taxeFonciere.text) ?? 0,
         immeubleId: _immeubleId,
         etage: _etageCode(_etageVal).isNotEmpty ? _etageCode(_etageVal) : null,
         numero: _numero.text.isNotEmpty ? _numero.text : null,
