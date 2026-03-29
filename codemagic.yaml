@@ -21,9 +21,9 @@ workflows:
     artifacts:
       - build/ios/iphoneos/Runner.app
 
-  android-workflow:
+  android-build:
     name: Android Build
-    instance_type: standard
+    instance_type: linux
     environment:
       flutter: stable
     scripts:
