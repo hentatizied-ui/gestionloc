@@ -1,9 +1,9 @@
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import '../models/models.dart';
 
 final _pdfEuro = NumberFormat.currency(locale: 'fr_FR', symbol: 'EUR', decimalDigits: 2);
@@ -19,14 +19,14 @@ class PdfService {
   }) async {
     final pdf = pw.Document();
 
-    final sig1Bytes = await rootBundle.load('assets/images/signature_saafi.png');
+    final sig1Bytes = await rootBundle.load('assets/images/signature_saafi.jpg');
     final sig2Bytes = await rootBundle.load('assets/images/signature_hentati.jpg');
     final sig1 = pw.MemoryImage(sig1Bytes.buffer.asUint8List());
     final sig2 = pw.MemoryImage(sig2Bytes.buffer.asUint8List());
 
-    final font = await PdfGoogleFonts.nunitoRegular();
-    final fontBold = await PdfGoogleFonts.nunitoBold();
-    final fontItalic = await PdfGoogleFonts.nunitoItalic();
+    final font = pw.Font.helvetica();
+    final fontBold = pw.Font.helveticaBold();
+    final fontItalic = pw.Font.helveticaOblique();
 
     final moisStr = _capitalize(_pdfDateMoisF.format(mois));
     final loyer = bien.loyerMensuel;
@@ -135,7 +135,7 @@ class PdfService {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
-                    pw.Image(sig1, width: 120, height: 90, fit: pw.BoxFit.contain),
+                    if (sig1 != null) pw.Image(sig1, width: 120, height: 90, fit: pw.BoxFit.contain),
                     pw.Text('_________________________', style: styleNormal),
                     pw.SizedBox(height: 2),
                     pw.Text('Mohamed SAAFI', style: styleBold),
@@ -144,7 +144,7 @@ class PdfService {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
-                    pw.Image(sig2, width: 110, height: 90, fit: pw.BoxFit.contain),
+                    if (sig2 != null) pw.Image(sig2, width: 110, height: 90, fit: pw.BoxFit.contain),
                     pw.Text('_________________________', style: styleNormal),
                     pw.SizedBox(height: 2),
                     pw.Text('Zied HENTATI', style: styleBold),
@@ -203,8 +203,8 @@ class PdfService {
     required int annee,
   }) async {
     final pdf = pw.Document();
-    final font = await PdfGoogleFonts.nunitoRegular();
-    final fontBold = await PdfGoogleFonts.nunitoBold();
+    final font = pw.Font.helvetica();
+    final fontBold = pw.Font.helveticaBold();
 
     final styleNormal = pw.TextStyle(font: font, fontSize: 11);
     final styleBold = pw.TextStyle(font: fontBold, fontSize: 11);
@@ -229,7 +229,7 @@ class PdfService {
       }
     }
     taxes += (data.biens as List<Bien>).fold<double>(0, (s, b) => s + b.taxeFonciere);
-    final cfMontant = (data.chargesFixes as List<ChargeFixe>).where((cf) => cf.actif).fold<double>(0, (s, cf) => s + cf.montant * 12);
+    final cfMontant = (data.chargesFixes as List<ChargeFixe>).fold<double>(0, (s, cf) => s + cf.montantAnnee(annee));
     final totalRev = loyers + chargesRec;
     final totalChg = reparations + assurances + taxes + autres + cfMontant;
     final net = totalRev - totalChg;

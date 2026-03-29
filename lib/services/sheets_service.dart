@@ -6,7 +6,7 @@ class SheetsService extends ChangeNotifier {
   static const String _proxyUrl = 'https://script.google.com/macros/s/AKfycbwjxQYCPNSjz_y47f01nJJ-4qEx-vwlHcbdNCndf--oG4gGz7Y7rEuD-xS07c-iKDNB/exec';
   static const String _secret = 'gestionloc2024';
 
-  bool _isReady = true;
+  final bool _isReady = true;
   bool get isReady => _isReady;
 
   // ── Lire un onglet ──────────────────────────────────────────────────────

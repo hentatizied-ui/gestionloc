@@ -96,11 +96,14 @@ class _LocataireRow extends StatelessWidget {
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               if (bien != null) Text(_euro.format(bien.loyerMensuel), style: const TextStyle(fontWeight: FontWeight.w500)),
               const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: _statusColor(data.getStatutLocataire(loc)).withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
-                child: Text(_statusLabel(data.getStatutLocataire(loc)), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: _statusColor(data.getStatutLocataire(loc)))),
-              ),
+              Builder(builder: (_) {
+                final s = data.getStatutLocataire(loc);
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: _statusColor(s).withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+                  child: Text(_statusLabel(s), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: _statusColor(s))),
+                );
+              }),
             ]),
           ]),
         ),
@@ -377,17 +380,32 @@ class _QuittanceSheet extends StatelessWidget {
   }
 
   void _afficherPdf(BuildContext context) async {
-    final bytes = await _getPdfBytes(context);
-    if (bytes == null || !context.mounted) return;
-    final moisStr = DateFormat('MMMM_yyyy', 'fr_FR').format(mois);
-    await Printing.layoutPdf(onLayout: (_) => bytes, name: 'Quittance_' + loc.nom + '_' + moisStr + '.pdf');
+    try {
+      final bytes = await _getPdfBytes(context);
+      if (bytes == null || !context.mounted) return;
+      final moisStr = DateFormat('MMMM_yyyy', 'fr_FR').format(mois);
+      final filename = 'Quittance_' + loc.nom + '_' + moisStr + '.pdf';
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => _PdfViewerPage(bytes: bytes, title: filename),
+      ));
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur PDF: ' + e.toString()), backgroundColor: Colors.red),
+      );
+    }
   }
 
   void _partagerPdf(BuildContext context) async {
-    final bytes = await _getPdfBytes(context);
-    if (bytes == null || !context.mounted) return;
-    final moisStr = DateFormat('MMMM_yyyy', 'fr_FR').format(mois);
-    await Printing.sharePdf(bytes: bytes, filename: 'Quittance_' + loc.nom + '_' + moisStr + '.pdf');
+    try {
+      final bytes = await _getPdfBytes(context);
+      if (bytes == null || !context.mounted) return;
+      final moisStr = DateFormat('MMMM_yyyy', 'fr_FR').format(mois);
+      await Printing.sharePdf(bytes: bytes, filename: 'Quittance_' + loc.nom + '_' + moisStr + '.pdf');
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur PDF: ' + e.toString()), backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override
@@ -798,6 +816,37 @@ class _DatePicker extends StatelessWidget {
           const Spacer(),
           Text(_dateF.format(date), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
         ]),
+      ),
+    );
+  }
+}
+
+// ─── PDF VIEWER ────────────────────────────────────────────────────────────
+
+class _PdfViewerPage extends StatelessWidget {
+  final Uint8List bytes;
+  final String title;
+  const _PdfViewerPage({required this.bytes, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title, style: const TextStyle(fontSize: 14)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.share),
+            onPressed: () => Printing.sharePdf(bytes: bytes, filename: title),
+          ),
+        ],
+      ),
+      body: PdfPreview(
+        build: (_) => bytes,
+        allowPrinting: false,
+        allowSharing: false,
+        canChangePageFormat: false,
+        canChangeOrientation: false,
+        canDebug: false,
       ),
     );
   }

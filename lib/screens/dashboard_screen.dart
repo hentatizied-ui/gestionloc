@@ -5,7 +5,6 @@ import 'package:fl_chart/fl_chart.dart';
 import '../services/data_service.dart';
 import '../models/models.dart';
 import '../main.dart';
-import 'locataires_screen.dart';
 
 final _euro = NumberFormat.currency(locale: 'fr_FR', symbol: '€', decimalDigits: 0);
 final _dateF = DateFormat('dd/MM/yyyy', 'fr_FR');
@@ -162,10 +161,10 @@ class _AlertesBails extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Icon(Icons.event_busy, size: 16, color: Color(0xFF856404)),
-            const SizedBox(width: 6),
-            const Text('Bails expirants', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: Color(0xFF856404))),
+          const Row(children: [
+            Icon(Icons.event_busy, size: 16, color: Color(0xFF856404)),
+            SizedBox(width: 6),
+            Text('Bails expirants', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: Color(0xFF856404))),
           ]),
           const SizedBox(height: 10),
           ...expirants.map((l) {
@@ -312,7 +311,7 @@ class _ValiderBtnState extends State<_ValiderBtn> {
     setState(() => _loading = true);
     final montant = (widget.bien?.loyerMensuel ?? 0) + (widget.bien?.charges ?? 0);
     final tx = widget.data.nouvTransaction(
-      label: 'Loyer ' + DateFormat('MMMM yyyy', 'fr_FR').format(widget.mois) + ' - ' + widget.loc.nomComplet,
+      label: 'Loyer ${DateFormat('MMMM yyyy', 'fr_FR').format(widget.mois)} - ${widget.loc.nomComplet}',
       montant: montant,
       type: TypeTransaction.loyer,
       date: DateTime(widget.mois.year, widget.mois.month, 1),
@@ -431,7 +430,7 @@ class _MoisPaiementRowState extends State<_MoisPaiementRow> {
     final montant = (widget.bien?.loyerMensuel ?? 0) + (widget.bien?.charges ?? 0);
     final moisStr = DateFormat('MMMM yyyy', 'fr_FR').format(widget.mois);
     final tx = widget.data.nouvTransaction(
-      label: 'Loyer ' + moisStr + ' - ' + widget.loc.nomComplet,
+      label: 'Loyer $moisStr - ${widget.loc.nomComplet}',
       montant: montant,
       type: TypeTransaction.loyer,
       date: DateTime(widget.mois.year, widget.mois.month, 1),
@@ -502,7 +501,7 @@ class _LocataireFullDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       height: MediaQuery.of(context).size.height * 0.9,
       child: Column(children: [
         Container(width: 36, height: 4, margin: const EdgeInsets.symmetric(vertical: 12),
@@ -660,9 +659,9 @@ class _OccupationCard extends StatelessWidget {
             )),
           ),
           const SizedBox(height: 8),
-          _Legend(color: AppTheme.primary, label: 'Loués'),
+          const _Legend(color: AppTheme.primary, label: 'Loués'),
           const SizedBox(height: 4),
-          _Legend(color: AppTheme.warning, label: 'Vacants'),
+          const _Legend(color: AppTheme.warning, label: 'Vacants'),
         ]),
       ),
     );

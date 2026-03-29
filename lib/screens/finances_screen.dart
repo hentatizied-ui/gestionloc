@@ -527,7 +527,7 @@ class _ChargeFixeRow extends StatelessWidget {
             Text(_datesCf(cf), style: TextStyle(fontSize: 10, color: Colors.grey[500])),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('-${_euro.format(cf.montant)}/mois',
+            Text('-' + _euro.format(cf.estAnnuelle ? cf.montant * 12 : cf.montant) + (cf.estAnnuelle ? '/an' : '/mois'),
                 style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13,
                     color: cf.actif ? AppTheme.danger : Colors.grey)),
             const SizedBox(height: 4),
@@ -567,6 +567,13 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
   late String? _bienId = widget.charge?.bienId;
   late DateTime _dateDebut = widget.charge?.dateDebut ?? DateTime.now();
   late DateTime? _dateFin = widget.charge?.dateFin;
+  int? _anneeSelectionnee;
+
+  @override
+  void initState() {
+    super.initState();
+    _anneeSelectionnee = widget.charge?.dateDebut.year;
+  }
   bool _estAnnuelle = false;
   bool _saving = false;
 
@@ -625,13 +632,13 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
               // Type
               Row(children: [
                 _TypeCBtn('Crédit', Icons.account_balance, _typeCharge == 'credit',
-                    () => setState(() { _typeCharge = 'credit'; _estAnnuelle = false; })),
+                    () => setState(() { _typeCharge = 'credit'; _estAnnuelle = false; _anneeSelectionnee = null; })),
                 const SizedBox(width: 8),
                 _TypeCBtn('Assurance', Icons.shield_outlined, _typeCharge == 'assurance',
-                    () => setState(() => _typeCharge = 'assurance')),
+                    () => setState(() { _typeCharge = 'assurance'; _anneeSelectionnee = null; })),
                 const SizedBox(width: 8),
                 _TypeCBtn('Taxe', Icons.receipt_long_outlined, _typeCharge == 'taxe',
-                    () => setState(() => _typeCharge = 'taxe')),
+                    () => setState(() { _typeCharge = 'taxe'; _anneeSelectionnee = null; })),
               ]),
               const SizedBox(height: 20),
 
@@ -649,10 +656,10 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
               if (_typeCharge != 'credit') ...[
                 Row(children: [
                   Expanded(child: _FreqCBtn('Mensuelle', !_estAnnuelle,
-                      () => setState(() => _estAnnuelle = false))),
+                      () => setState(() { _estAnnuelle = false; _anneeSelectionnee = null; }))),
                   const SizedBox(width: 8),
                   Expanded(child: _FreqCBtn('Annuelle', _estAnnuelle,
-                      () => setState(() => _estAnnuelle = true))),
+                      () => setState(() { _estAnnuelle = true; _anneeSelectionnee = null; }))),
                 ]),
                 const SizedBox(height: 14),
               ],
@@ -676,21 +683,63 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
               const SizedBox(height: 14),
 
               // Période
-              Row(children: [
-                Expanded(child: _DatePickerCF(
-                  label: 'Début',
-                  date: _dateDebut,
-                  onPick: (d) { if (d != null) setState(() => _dateDebut = d); },
-                )),
-                const SizedBox(width: 12),
-                if (_typeCharge == 'credit' || (_typeCharge == 'assurance' && !_estAnnuelle))
+              if (_typeCharge == 'taxe' && _estAnnuelle) ...[
+                // Taxe annuelle : saisie de l'année uniquement
+                if (_anneeSelectionnee == null)
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDialog<int>(
+                        context: context,
+                        builder: (_) => _AnneeDialog(initial: DateTime.now().year),
+                      );
+                      if (picked != null) setState(() {
+                        _anneeSelectionnee = picked;
+                        _dateDebut = DateTime(picked, 1, 1);
+                        _dateFin = DateTime(picked, 12, 31);
+                      });
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.orange),
+                        borderRadius: BorderRadius.circular(10),
+                        color: Colors.orange.withOpacity(0.05),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.calendar_today_outlined, size: 16, color: Colors.orange),
+                        const SizedBox(width: 10),
+                        Text("Sélectionner l'année fiscale *",
+                            style: TextStyle(color: Colors.orange[700], fontWeight: FontWeight.w500)),
+                      ]),
+                    ),
+                  )
+                else
+                  _AnneePickerCF(
+                    annee: _anneeSelectionnee!,
+                    onPick: (annee) => setState(() {
+                      _anneeSelectionnee = annee;
+                      _dateDebut = DateTime(annee, 1, 1);
+                      _dateFin = DateTime(annee, 12, 31);
+                    }),
+                  ),
+              ] else ...[
+                Row(children: [
                   Expanded(child: _DatePickerCF(
-                    label: 'Fin',
-                    date: _dateFin,
-                    onPick: (d) => setState(() => _dateFin = d),
-                    nullable: true,
+                    label: 'Début',
+                    date: _dateDebut,
+                    onPick: (d) { if (d != null) setState(() => _dateDebut = d); },
                   )),
-              ]),
+                  const SizedBox(width: 12),
+                  if (_typeCharge == 'credit' || (_typeCharge == 'assurance' && !_estAnnuelle))
+                    Expanded(child: _DatePickerCF(
+                      label: 'Fin',
+                      date: _dateFin,
+                      onPick: (d) => setState(() => _dateFin = d),
+                      nullable: true,
+                    )),
+                ]),
+              ],
               const SizedBox(height: 20),
 
               ElevatedButton(
@@ -713,17 +762,36 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
 
   Future<void> _save() async {
     if (!_key.currentState!.validate()) return;
+    if (_typeCharge == 'taxe' && _estAnnuelle && _anneeSelectionnee == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez sélectionner une année fiscale')),
+      );
+      return;
+    }
     setState(() => _saving = true);
     double montant = double.tryParse(_montant.text) ?? 0;
     if (_estAnnuelle) montant = montant / 12;
-    await widget.data.ajouterChargeFixe(widget.data.nouvChargeFixe(
-      label: _label.text,
-      montant: montant,
-      type: _dartType,
-      bienId: _bienId,
-      dateDebut: _dateDebut,
-      dateFin: _dateFin,
-    ));
+    if (widget.charge != null) {
+      await widget.data.modifierChargeFixe(widget.charge!.copyWith(
+        label: _label.text,
+        montant: montant,
+        type: _dartType,
+        bienId: _bienId,
+        dateDebut: _dateDebut,
+        dateFin: _dateFin,
+        estAnnuelle: _estAnnuelle,
+      ));
+    } else {
+      await widget.data.ajouterChargeFixe(widget.data.nouvChargeFixe(
+        label: _label.text,
+        montant: montant,
+        type: _dartType,
+        bienId: _bienId,
+        dateDebut: _dateDebut,
+        dateFin: _dateFin,
+        estAnnuelle: _estAnnuelle,
+      ));
+    }
     if (mounted) Navigator.pop(context);
   }
 
@@ -786,6 +854,76 @@ class _FreqCBtn extends StatelessWidget {
   }
 }
 
+
+// ─── ANNEE DIALOG ────────────────────────────────────────────────────────
+
+class _AnneeDialog extends StatefulWidget {
+  final int initial;
+  const _AnneeDialog({required this.initial});
+  @override
+  State<_AnneeDialog> createState() => _AnneeDialogState();
+}
+
+class _AnneeDialogState extends State<_AnneeDialog> {
+  late int _annee = widget.initial;
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Année fiscale'),
+      content: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        IconButton(icon: const Icon(Icons.chevron_left), onPressed: () => setState(() => _annee--)),
+        Text(_annee.toString(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
+        IconButton(icon: const Icon(Icons.chevron_right), onPressed: () => setState(() => _annee++)),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, _annee),
+          style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary, foregroundColor: Colors.white),
+          child: const Text('Confirmer'),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── ANNEE PICKER CHARGE FIXE ────────────────────────────────────────────
+
+class _AnneePickerCF extends StatelessWidget {
+  final int annee;
+  final ValueChanged<int> onPick;
+  const _AnneePickerCF({required this.annee, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      IconButton(
+        icon: const Icon(Icons.chevron_left),
+        onPressed: () => onPick(annee - 1),
+      ),
+      Expanded(child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey[400]!),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(children: [
+          const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
+          const SizedBox(width: 8),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Année fiscale', style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+            const SizedBox(height: 2),
+            Text(annee.toString(), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          ]),
+        ]),
+      )),
+      IconButton(
+        icon: const Icon(Icons.chevron_right),
+        onPressed: () => onPick(annee + 1),
+      ),
+    ]);
+  }
+}
 
 // ─── DATE PICKER CHARGE FIXE ──────────────────────────────────────────────
 
@@ -949,6 +1087,7 @@ class _FormTransactionState extends State<FormTransaction> {
 
   Future<void> _save() async {
     if (!_key.currentState!.validate()) return;
+
     setState(() => _saving = true);
     final montant = (double.tryParse(_montant.text) ?? 0) * (_isRecette ? 1 : -1);
     await widget.data.ajouterTransaction(widget.data.nouvTransaction(
@@ -1233,6 +1372,7 @@ class _FormTicketState extends State<FormTicket> {
 
   Future<void> _save() async {
     if (!_key.currentState!.validate()) return;
+
     setState(() => _saving = true);
     await widget.data.ajouterTicket(widget.data.nouvTicket(
       titre: _titre.text, description: _desc.text,

@@ -6,7 +6,6 @@ import 'dashboard_screen.dart';
 import 'biens_screen.dart';
 import 'locataires_screen.dart';
 import 'finances_screen.dart';
-import 'maintenance_screen.dart';
 import 'compta_screen.dart';
 import 'splash_screen.dart';
 

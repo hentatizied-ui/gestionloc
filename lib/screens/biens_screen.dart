@@ -654,14 +654,7 @@ class _FormBienState extends State<FormBien> {
                 const SizedBox(width: 12),
                 Expanded(child: _Field(ctrl: _charges, label: 'Charges (€)', keyboard: TextInputType.number)),
               ]),
-              const Divider(height: 24),
-              const Text('Données financières', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey)),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: _Field(ctrl: _prixAchat, label: "Prix d'achat (€)", keyboard: TextInputType.number, required: false)),
-                const SizedBox(width: 12),
-                Expanded(child: _Field(ctrl: _taxeFonciere, label: 'Taxe foncière/an (€)', keyboard: TextInputType.number, required: false)),
-              ]),
+
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _saving ? null : _save,

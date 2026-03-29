@@ -114,7 +114,7 @@ Map<String, double> _calcCompta(DataService data, int annee) {
     }
   }
   taxes += data.biens.fold<double>(0, (s, b) => s + b.taxeFonciere);
-  final cfMontant = data.chargesFixes.where((cf) => cf.actif).fold<double>(0, (s, cf) => s + cf.montant * 12);
+  final cfMontant = data.chargesFixes.where((cf) => cf.actif).fold<double>(0, (s, cf) => s + cf.montantAnnee(annee));
   final totalRev = loyers + chargesRec;
   final totalChg = reparations + assurances + taxes + autres + cfMontant;
   return {
@@ -205,8 +205,12 @@ class _ParBienTab extends StatelessWidget {
         (t.bienId == null || t.bienId!.isEmpty) &&
         t.immeubleId == immeuble.id
       ).toList();
+      // Charges fixes (taxe foncière etc.) rattachées à l'immeuble
+      final cfCommunes = data.chargesFixes.where((cf) =>
+        cf.bienId == immeuble.id
+      ).toList();
       items.add(_ImmeubleSection(immeuble: immeuble, biens: biens,
-          chargesCommunes: chargesCommunes, data: data, annee: annee));
+          chargesCommunes: chargesCommunes, cfCommunes: cfCommunes, data: data, annee: annee));
     }
 
     final biensSansImm = data.biensSansImmeuble;
@@ -255,7 +259,7 @@ class _BienIndependantCardState extends State<_BienIndependantCard> {
     final loyer = txs.where((t) => t.isRecette && t.type == TypeTransaction.loyer).fold<double>(0, (s, t) => s + t.montant);
     final cfBien = widget.data.chargesFixes.where((cf) => cf.bienId == widget.bien.id && cf.actif).toList();
     final charges = txs.where((t) => !t.isRecette).fold<double>(0, (s, t) => s + t.montant.abs())
-        + cfBien.fold<double>(0, (s, cf) => s + cf.montant * 12)
+        + cfBien.fold<double>(0, (s, cf) => s + cf.montantAnnee(widget.annee))
         + widget.bien.taxeFonciere;
     final net = loyer - charges;
 
@@ -323,10 +327,11 @@ class _ImmeubleSection extends StatefulWidget {
   final Immeuble immeuble;
   final List<Bien> biens;
   final List<Transaction> chargesCommunes;
+  final List<ChargeFixe> cfCommunes;
   final DataService data;
   final int annee;
   const _ImmeubleSection({required this.immeuble, required this.biens,
-      required this.chargesCommunes, required this.data, required this.annee});
+      required this.chargesCommunes, required this.cfCommunes, required this.data, required this.annee});
   @override
   State<_ImmeubleSection> createState() => _ImmeubleSectionState();
 }
@@ -335,7 +340,9 @@ class _ImmeubleSectionState extends State<_ImmeubleSection> {
   bool _expanded = true;
   @override
   Widget build(BuildContext context) {
-    final totalCommun = widget.chargesCommunes.fold<double>(0, (s, t) => s + t.montant.abs());
+    final totalTxCommunes = widget.chargesCommunes.fold<double>(0, (s, t) => s + t.montant.abs());
+    final totalCfCommunes = widget.cfCommunes.fold<double>(0, (s, cf) => s + cf.montantAnnee(widget.annee));
+    final totalCommun = totalTxCommunes + totalCfCommunes;
 
     // Calcul loyer total annuel et charges totales de l'immeuble
     double loyerTotal = 0;
@@ -346,7 +353,7 @@ class _ImmeubleSectionState extends State<_ImmeubleSection> {
       chargesTotal += txs.where((t) => !t.isRecette).fold<double>(0, (s, t) => s + t.montant.abs());
       // Charges fixes du bien
       final cfBien = widget.data.chargesFixes.where((cf) => cf.bienId == b.id && cf.actif).toList();
-      chargesTotal += cfBien.fold<double>(0, (s, cf) => s + cf.montant * 12);
+      chargesTotal += cfBien.fold<double>(0, (s, cf) => s + cf.montantAnnee(widget.annee));
       chargesTotal += b.taxeFonciere;
     }
     final net = loyerTotal - chargesTotal;
@@ -404,8 +411,9 @@ class _ImmeubleSectionState extends State<_ImmeubleSection> {
         ...widget.biens.map((b) => _BienComptaCard(bien: b, data: widget.data, annee: widget.annee)),
         _ChargesCommunesCard(
           charges: widget.chargesCommunes,
+          cfCommunes: widget.cfCommunes,
           total: totalCommun,
-          taxeFonciere: widget.biens.fold<double>(0, (s, b) => s + b.taxeFonciere),
+          annee: widget.annee,
         ),
       ],
       const SizedBox(height: 16),
@@ -415,9 +423,10 @@ class _ImmeubleSectionState extends State<_ImmeubleSection> {
 
 class _ChargesCommunesCard extends StatefulWidget {
   final List<Transaction> charges;
+  final List<ChargeFixe> cfCommunes;
   final double total;
-  final double taxeFonciere;
-  const _ChargesCommunesCard({required this.charges, required this.total, this.taxeFonciere = 0});
+  final int annee;
+  const _ChargesCommunesCard({required this.charges, required this.cfCommunes, required this.total, required this.annee});
   @override
   State<_ChargesCommunesCard> createState() => _ChargesCommunesCardState();
 }
@@ -440,7 +449,7 @@ class _ChargesCommunesCardState extends State<_ChargesCommunesCard> {
               const SizedBox(width: 8),
               const Expanded(child: Text('Charges communes',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
-              Text(_euro.format(widget.total + widget.taxeFonciere),
+              Text(_euro.format(widget.total),
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppTheme.danger)),
               const SizedBox(width: 6),
               Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
@@ -448,13 +457,14 @@ class _ChargesCommunesCardState extends State<_ChargesCommunesCard> {
             ]),
             if (_expanded) ...[
               const Divider(height: 16),
-              // Taxe foncière de l'immeuble
-              _LigneCommuneRow('Taxe foncière immeuble', widget.taxeFonciere),
-              if (widget.charges.isEmpty && widget.taxeFonciere == 0)
-                Text('Ajoutez des charges communes via Finances → Transactions.',
+              if (widget.cfCommunes.isEmpty && widget.charges.isEmpty)
+                Text('Ajoutez des charges communes via Finances → Charges fixes (Taxe) ou Transactions.',
                     style: TextStyle(fontSize: 11, color: Colors.grey[600]))
-              else
+              else ...[
+                ...widget.cfCommunes.map((cf) => _LigneCommuneRow(
+                    cf.label, cf.montantAnnee(widget.annee))),
                 ...widget.charges.map((tx) => _LigneCommuneRow(tx.label, tx.montant.abs())),
+              ],
             ],
           ]),
         ),
@@ -483,8 +493,8 @@ class _BienComptaCardState extends State<_BienComptaCard> {
     final reparations = txs.where((t) => !t.isRecette && t.type == TypeTransaction.reparation).fold<double>(0, (s, t) => s + t.montant.abs());
     final loyerAnnuel = widget.bien.loyerMensuel * 12;
     final cfBien = widget.data.chargesFixes.where((cf) => cf.bienId == widget.bien.id && cf.actif).toList();
-    final credits = cfBien.where((cf) => cf.type == TypeTransaction.charge).fold<double>(0, (s, cf) => s + cf.montant * 12);
-    final assurancesCf = cfBien.where((cf) => cf.type == TypeTransaction.assurance).fold<double>(0, (s, cf) => s + cf.montant * 12);
+    final credits = cfBien.where((cf) => cf.type == TypeTransaction.charge).fold<double>(0, (s, cf) => s + cf.montantAnnee(widget.annee));
+    final assurancesCf = cfBien.where((cf) => cf.type == TypeTransaction.assurance).fold<double>(0, (s, cf) => s + cf.montantAnnee(widget.annee));
     final totalCharges = reparations + credits + assurancesCf;
     final net = loyerEncaisse + chargesRec - totalCharges;
     final rendBrut = widget.bien.prixAchat > 0 ? (loyerAnnuel / widget.bien.prixAchat * 100) : 0.0;

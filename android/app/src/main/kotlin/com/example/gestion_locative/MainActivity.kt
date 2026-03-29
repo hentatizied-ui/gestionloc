@@ -1,4 +1,4 @@
-package com.example.gestionloc
+package com.example.gestion_locative
 
 import io.flutter.embedding.android.FlutterActivity
 

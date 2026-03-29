@@ -274,16 +274,17 @@ const _sentinel = Object();
 class ChargeFixe {
   final String id;
   final String label;
-  final double montant;
+  final double montant; // toujours mensuel en stockage
   final TypeTransaction type;
   final String? bienId;
   final DateTime dateDebut;
   final DateTime? dateFin;
+  final bool estAnnuelle; // true si l'utilisateur a saisi un montant annuel
 
   ChargeFixe({
     required this.id, required this.label, required this.montant,
     required this.type, this.bienId, required this.dateDebut,
-    this.dateFin,
+    this.dateFin, this.estAnnuelle = false,
   });
 
   bool get actif {
@@ -314,20 +315,23 @@ class ChargeFixe {
     bienId: m['bienId']?.isNotEmpty == true ? m['bienId'] : null,
     dateDebut: DateTime.tryParse(m['dateDebut'] ?? '') ?? DateTime.now(),
     dateFin: m['dateFin']?.isNotEmpty == true ? DateTime.tryParse(m['dateFin']!) : null,
+    estAnnuelle: m['estAnnuelle'] == 'OUI',
   );
 
   List<String> toRow() => [
     id, label, montant.toString(), type.name,
     bienId ?? '', dateDebut.toIso8601String().substring(0, 10),
     dateFin?.toIso8601String().substring(0, 10) ?? '',
+    estAnnuelle ? 'OUI' : 'NON',
   ];
 
-  ChargeFixe copyWith({String? label, double? montant, TypeTransaction? type, Object? bienId = _sentinel, DateTime? dateDebut, Object? dateFin = _sentinel}) =>
+  ChargeFixe copyWith({String? label, double? montant, TypeTransaction? type, Object? bienId = _sentinel, DateTime? dateDebut, Object? dateFin = _sentinel, bool? estAnnuelle}) =>
     ChargeFixe(
       id: id, label: label ?? this.label, montant: montant ?? this.montant,
       type: type ?? this.type,
       bienId: bienId == _sentinel ? this.bienId : bienId as String?,
       dateDebut: dateDebut ?? this.dateDebut,
       dateFin: dateFin == _sentinel ? this.dateFin : dateFin as DateTime?,
+      estAnnuelle: estAnnuelle ?? this.estAnnuelle,
     );
 }

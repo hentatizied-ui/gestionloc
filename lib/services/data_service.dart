@@ -346,6 +346,6 @@ class DataService extends ChangeNotifier {
   Ticket nouvTicket({required String titre, required String description, required String bienId, String? immeubleId, required PrioriteTicket priorite, String? rapportePar}) =>
       Ticket(id: 'tkt_${_uuid.v4().substring(0, 8)}', titre: titre, description: description, bienId: bienId, immeubleId: immeubleId, priorite: priorite, rapportePar: rapportePar);
 
-  ChargeFixe nouvChargeFixe({required String label, required double montant, required TypeTransaction type, String? bienId, DateTime? dateDebut, DateTime? dateFin}) =>
-      ChargeFixe(id: 'cf_${_uuid.v4().substring(0, 8)}', label: label, montant: montant, type: type, bienId: bienId, dateDebut: dateDebut ?? DateTime.now(), dateFin: dateFin);
+  ChargeFixe nouvChargeFixe({required String label, required double montant, required TypeTransaction type, String? bienId, DateTime? dateDebut, DateTime? dateFin, bool estAnnuelle = false}) =>
+      ChargeFixe(id: 'cf_${_uuid.v4().substring(0, 8)}', label: label, montant: montant, type: type, bienId: bienId, dateDebut: dateDebut ?? DateTime.now(), dateFin: dateFin, estAnnuelle: estAnnuelle);
 }
