@@ -211,17 +211,111 @@ class _ParBienTab extends StatelessWidget {
 
     final biensSansImm = data.biensSansImmeuble;
     if (biensSansImm.isNotEmpty) {
-      items.add(Padding(
-        padding: const EdgeInsets.only(top: 8, bottom: 6),
-        child: Text('Biens indépendants',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey[700])),
-      ));
-      for (final b in biensSansImm) {
-        items.add(_BienComptaCard(bien: b, data: data, annee: annee));
-      }
+      items.add(_BienIndependantSection(biens: biensSansImm, data: data, annee: annee));
     }
 
     return ListView(padding: const EdgeInsets.all(16), children: items);
+  }
+}
+
+class _BienIndependantSection extends StatefulWidget {
+  final List<Bien> biens;
+  final DataService data;
+  final int annee;
+  const _BienIndependantSection({required this.biens, required this.data, required this.annee});
+  @override
+  State<_BienIndependantSection> createState() => _BienIndependantSectionState();
+}
+
+class _BienIndependantSectionState extends State<_BienIndependantSection> {
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: widget.biens.map((b) => _BienIndependantCard(bien: b, data: widget.data, annee: widget.annee)).toList(),
+    );
+  }
+}
+
+class _BienIndependantCard extends StatefulWidget {
+  final Bien bien;
+  final DataService data;
+  final int annee;
+  const _BienIndependantCard({required this.bien, required this.data, required this.annee});
+  @override
+  State<_BienIndependantCard> createState() => _BienIndependantCardState();
+}
+
+class _BienIndependantCardState extends State<_BienIndependantCard> {
+  bool _expanded = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final txs = widget.data.getTransactionsDuBien(widget.bien.id).where((t) => t.date.year == widget.annee).toList();
+    final loyer = txs.where((t) => t.isRecette && t.type == TypeTransaction.loyer).fold<double>(0, (s, t) => s + t.montant);
+    final cfBien = widget.data.chargesFixes.where((cf) => cf.bienId == widget.bien.id && cf.actif).toList();
+    final charges = txs.where((t) => !t.isRecette).fold<double>(0, (s, t) => s + t.montant.abs())
+        + cfBien.fold<double>(0, (s, cf) => s + cf.montant * 12)
+        + widget.bien.taxeFonciere;
+    final net = loyer - charges;
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 8),
+      InkWell(
+        onTap: () => setState(() => _expanded = !_expanded),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: Column(children: [
+            Row(children: [
+              Icon(Icons.home_outlined, size: 16, color: Colors.grey[700]),
+              const SizedBox(width: 8),
+              Expanded(child: Text(widget.bien.nom,
+                  style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13, color: Colors.grey[800]))),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: net >= 0 ? AppTheme.primary.withOpacity(0.15) : AppTheme.danger.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(_euro.format(net),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                        color: net >= 0 ? AppTheme.primary : AppTheme.danger)),
+              ),
+              const SizedBox(width: 8),
+              Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                  color: Colors.grey[600], size: 18),
+            ]),
+            const SizedBox(height: 8),
+            Row(children: [
+              const SizedBox(width: 24),
+              Expanded(child: Row(children: [
+                Icon(Icons.arrow_upward, size: 12, color: AppTheme.primary.withOpacity(0.7)),
+                const SizedBox(width: 4),
+                Text('Loyers ' + _euro.format(loyer),
+                    style: TextStyle(fontSize: 11, color: Colors.grey[700])),
+              ])),
+              Row(children: [
+                Icon(Icons.arrow_downward, size: 12, color: AppTheme.danger.withOpacity(0.7)),
+                const SizedBox(width: 4),
+                Text('Charges ' + _euro.format(charges),
+                    style: TextStyle(fontSize: 11, color: Colors.grey[700])),
+              ]),
+            ]),
+          ]),
+        ),
+      ),
+      if (_expanded) ...[
+        const SizedBox(height: 6),
+        _BienComptaCard(bien: widget.bien, data: widget.data, annee: widget.annee),
+      ],
+      const SizedBox(height: 8),
+    ]);
   }
 }
 
@@ -242,29 +336,77 @@ class _ImmeubleSectionState extends State<_ImmeubleSection> {
   @override
   Widget build(BuildContext context) {
     final totalCommun = widget.chargesCommunes.fold<double>(0, (s, t) => s + t.montant.abs());
+
+    // Calcul loyer total annuel et charges totales de l'immeuble
+    double loyerTotal = 0;
+    double chargesTotal = totalCommun;
+    for (final b in widget.biens) {
+      final txs = widget.data.getTransactionsDuBien(b.id).where((t) => t.date.year == widget.annee).toList();
+      loyerTotal += txs.where((t) => t.isRecette && t.type == TypeTransaction.loyer).fold<double>(0, (s, t) => s + t.montant);
+      chargesTotal += txs.where((t) => !t.isRecette).fold<double>(0, (s, t) => s + t.montant.abs());
+      // Charges fixes du bien
+      final cfBien = widget.data.chargesFixes.where((cf) => cf.bienId == b.id && cf.actif).toList();
+      chargesTotal += cfBien.fold<double>(0, (s, cf) => s + cf.montant * 12);
+      chargesTotal += b.taxeFonciere;
+    }
+    final net = loyerTotal - chargesTotal;
+
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       InkWell(
         onTap: () => setState(() => _expanded = !_expanded),
         borderRadius: BorderRadius.circular(10),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(color: AppTheme.primaryLight,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppTheme.primary.withOpacity(0.3))),
-          child: Row(children: [
-            const Icon(Icons.apartment, size: 16, color: AppTheme.primaryDark),
-            const SizedBox(width: 8),
-            Expanded(child: Text(widget.immeuble.nom,
-                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13, color: AppTheme.primaryDark))),
-            Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                color: AppTheme.primaryDark, size: 18),
+          child: Column(children: [
+            Row(children: [
+              const Icon(Icons.apartment, size: 16, color: AppTheme.primaryDark),
+              const SizedBox(width: 8),
+              Expanded(child: Text(widget.immeuble.nom,
+                  style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13, color: AppTheme.primaryDark))),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: net >= 0 ? AppTheme.primary.withOpacity(0.2) : AppTheme.danger.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(_euro.format(net),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                        color: net >= 0 ? AppTheme.primaryDark : AppTheme.danger)),
+              ),
+              const SizedBox(width: 8),
+              Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                  color: AppTheme.primaryDark, size: 18),
+            ]),
+            const SizedBox(height: 8),
+            Row(children: [
+              const SizedBox(width: 24),
+              Expanded(child: Row(children: [
+                Icon(Icons.arrow_upward, size: 12, color: AppTheme.primary.withOpacity(0.7)),
+                const SizedBox(width: 4),
+                Text('Loyers ' + _euro.format(loyerTotal),
+                    style: TextStyle(fontSize: 11, color: AppTheme.primaryDark.withOpacity(0.8))),
+              ])),
+              Row(children: [
+                Icon(Icons.arrow_downward, size: 12, color: AppTheme.danger.withOpacity(0.7)),
+                const SizedBox(width: 4),
+                Text('Charges ' + _euro.format(chargesTotal),
+                    style: TextStyle(fontSize: 11, color: AppTheme.danger.withOpacity(0.8))),
+              ]),
+            ]),
           ]),
         ),
       ),
       if (_expanded) ...[
         const SizedBox(height: 8),
         ...widget.biens.map((b) => _BienComptaCard(bien: b, data: widget.data, annee: widget.annee)),
-        _ChargesCommunesCard(charges: widget.chargesCommunes, total: totalCommun),
+        _ChargesCommunesCard(
+          charges: widget.chargesCommunes,
+          total: totalCommun,
+          taxeFonciere: widget.biens.fold<double>(0, (s, b) => s + b.taxeFonciere),
+        ),
       ],
       const SizedBox(height: 16),
     ]);
@@ -274,7 +416,8 @@ class _ImmeubleSectionState extends State<_ImmeubleSection> {
 class _ChargesCommunesCard extends StatefulWidget {
   final List<Transaction> charges;
   final double total;
-  const _ChargesCommunesCard({required this.charges, required this.total});
+  final double taxeFonciere;
+  const _ChargesCommunesCard({required this.charges, required this.total, this.taxeFonciere = 0});
   @override
   State<_ChargesCommunesCard> createState() => _ChargesCommunesCardState();
 }
@@ -297,7 +440,7 @@ class _ChargesCommunesCardState extends State<_ChargesCommunesCard> {
               const SizedBox(width: 8),
               const Expanded(child: Text('Charges communes',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
-              Text(_euro.format(widget.total),
+              Text(_euro.format(widget.total + widget.taxeFonciere),
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppTheme.danger)),
               const SizedBox(width: 6),
               Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
@@ -305,18 +448,13 @@ class _ChargesCommunesCardState extends State<_ChargesCommunesCard> {
             ]),
             if (_expanded) ...[
               const Divider(height: 16),
-              if (widget.charges.isEmpty)
+              // Taxe foncière de l'immeuble
+              _LigneCommuneRow('Taxe foncière immeuble', widget.taxeFonciere),
+              if (widget.charges.isEmpty && widget.taxeFonciere == 0)
                 Text('Ajoutez des charges communes via Finances → Transactions.',
                     style: TextStyle(fontSize: 11, color: Colors.grey[600]))
               else
-                ...widget.charges.map((tx) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(children: [
-                    Expanded(child: Text(tx.label, style: const TextStyle(fontSize: 11))),
-                    Text('-' + _euro.format(tx.montant.abs()),
-                        style: const TextStyle(fontSize: 11, color: AppTheme.danger)),
-                  ]),
-                )),
+                ...widget.charges.map((tx) => _LigneCommuneRow(tx.label, tx.montant.abs())),
             ],
           ]),
         ),
@@ -325,60 +463,102 @@ class _ChargesCommunesCardState extends State<_ChargesCommunesCard> {
   }
 }
 
-class _BienComptaCard extends StatelessWidget {
+class _BienComptaCard extends StatefulWidget {
   final Bien bien;
   final DataService data;
   final int annee;
   const _BienComptaCard({required this.bien, required this.data, required this.annee});
+  @override
+  State<_BienComptaCard> createState() => _BienComptaCardState();
+}
+
+class _BienComptaCardState extends State<_BienComptaCard> {
+  bool _expanded = true;
 
   @override
   Widget build(BuildContext context) {
-    final txs = data.getTransactionsDuBien(bien.id).where((t) => t.date.year == annee).toList();
+    final txs = widget.data.getTransactionsDuBien(widget.bien.id).where((t) => t.date.year == widget.annee).toList();
     final loyerEncaisse = txs.where((t) => t.isRecette && t.type == TypeTransaction.loyer).fold<double>(0, (s, t) => s + t.montant);
     final chargesRec = txs.where((t) => t.isRecette && t.type != TypeTransaction.loyer).fold<double>(0, (s, t) => s + t.montant);
-    final reparations = txs.where((t) => !t.isRecette).fold<double>(0, (s, t) => s + t.montant.abs());
-    final loyerAnnuel = bien.loyerMensuel * 12;
-    final taxe = bien.taxeFonciere;
-    final totalCharges = reparations + taxe;
+    final reparations = txs.where((t) => !t.isRecette && t.type == TypeTransaction.reparation).fold<double>(0, (s, t) => s + t.montant.abs());
+    final loyerAnnuel = widget.bien.loyerMensuel * 12;
+    final cfBien = widget.data.chargesFixes.where((cf) => cf.bienId == widget.bien.id && cf.actif).toList();
+    final credits = cfBien.where((cf) => cf.type == TypeTransaction.charge).fold<double>(0, (s, cf) => s + cf.montant * 12);
+    final assurancesCf = cfBien.where((cf) => cf.type == TypeTransaction.assurance).fold<double>(0, (s, cf) => s + cf.montant * 12);
+    final totalCharges = reparations + credits + assurancesCf;
     final net = loyerEncaisse + chargesRec - totalCharges;
-    final rendBrut = bien.prixAchat > 0 ? (loyerAnnuel / bien.prixAchat * 100) : 0.0;
-    final rendNet = bien.prixAchat > 0 ? (net / bien.prixAchat * 100) : 0.0;
+    final rendBrut = widget.bien.prixAchat > 0 ? (loyerAnnuel / widget.bien.prixAchat * 100) : 0.0;
+    final rendNet = widget.bien.prixAchat > 0 ? (net / widget.bien.prixAchat * 100) : 0.0;
+    final autres = txs.where((t) => !t.isRecette && t.type != TypeTransaction.reparation && t.type != TypeTransaction.assurance && t.type != TypeTransaction.taxe).fold<double>(0, (s, t) => s + t.montant.abs());
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(child: Text(bien.nom, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13))),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: net >= 0 ? AppTheme.primaryLight : const Color(0xFFFCEBEB),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(_euro.format(net), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500,
-                  color: net >= 0 ? AppTheme.primary : AppTheme.danger)),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          _LigneD('Loyer annuel théorique', loyerAnnuel, true, isTheo: true),
-          _LigneD('Loyer encaissé', loyerEncaisse, true),
-          if (chargesRec > 0) _LigneD('Charges récupérées', chargesRec, true),
-          const Divider(height: 12),
-          if (taxe > 0) _LigneD('Taxe foncière', taxe, false),
-          if (reparations > 0) _LigneD('Réparations / entretien', reparations, false),
-          if (bien.prixAchat > 0) ...[
-            const Divider(height: 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Expanded(child: _MiniStat2('Prix achat', _euro.format(bien.prixAchat), Colors.grey[700]!)),
-              Expanded(child: _MiniStat2('Rdt brut', _pct.format(rendBrut) + '%', AppTheme.blue)),
-              Expanded(child: _MiniStat2('Rdt net', _pct.format(rendNet) + '%',
-                  rendNet > 0 ? AppTheme.primary : AppTheme.danger)),
+              Expanded(child: Text(widget.bien.nom, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13))),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: net >= 0 ? AppTheme.primaryLight : const Color(0xFFFCEBEB),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(_euro.format(net), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500,
+                    color: net >= 0 ? AppTheme.primary : AppTheme.danger)),
+              ),
+              const SizedBox(width: 6),
+              Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.grey, size: 18),
             ]),
-          ],
-        ]),
+            if (_expanded) ...[
+              const SizedBox(height: 8),
+              _LigneSection('REVENUS'),
+              _LigneD('Loyer encaissé', loyerEncaisse, true),
+              if (chargesRec > 0) _LigneD('Charges récupérées', chargesRec, true),
+              const SizedBox(height: 6),
+              _LigneSection('CHARGES'),
+              _LigneD('Crédit(s)', credits, false),
+              _LigneD('Assurance(s)', assurancesCf, false),
+              _LigneD('Entretien / réparations', reparations, false),
+              _LigneD('Autre(s)', autres, false),
+              if (widget.bien.prixAchat > 0) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(8)),
+                  child: Row(children: [
+                    Expanded(child: _MiniStat2('Prix achat', _euro.format(widget.bien.prixAchat), Colors.grey[600]!)),
+                    Expanded(child: _MiniStat2('Rdt brut', _pct.format(rendBrut) + '%', AppTheme.blue)),
+                    Expanded(child: _MiniStat2('Rdt net', _pct.format(rendNet) + '%',
+                        rendNet > 0 ? AppTheme.primary : AppTheme.danger)),
+                  ]),
+                ),
+              ],
+            ],
+          ]),
+        ),
       ),
+    );
+  }
+}
+
+class _LigneCommuneRow extends StatelessWidget {
+  final String label;
+  final double value;
+  const _LigneCommuneRow(this.label, this.value);
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(children: [
+        Expanded(child: Text(label, style: const TextStyle(fontSize: 11))),
+        Text(value == 0 ? '0 €' : '-' + _euro.format(value),
+            style: TextStyle(fontSize: 11,
+                color: value == 0 ? Colors.grey[400] : AppTheme.danger)),
+      ]),
     );
   }
 }
@@ -402,6 +582,19 @@ class _LigneD extends StatelessWidget {
                 fontWeight: isTheo ? FontWeight.normal : FontWeight.w500,
                 color: isTheo ? Colors.grey[400] : (isRevenu ? AppTheme.primary : AppTheme.danger))),
       ]),
+    );
+  }
+}
+
+class _LigneSection extends StatelessWidget {
+  final String label;
+  const _LigneSection(this.label);
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+          color: Colors.grey[500], letterSpacing: 0.5)),
     );
   }
 }

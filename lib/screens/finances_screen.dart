@@ -19,7 +19,7 @@ class FinancesScreen extends StatefulWidget {
 }
 
 class _FinancesScreenState extends State<FinancesScreen> with SingleTickerProviderStateMixin {
-  late final _tab = TabController(length: 3, vsync: this);
+  late final _tab = TabController(length: 2, vsync: this);
 
   @override
   void dispose() { _tab.dispose(); super.dispose(); }
@@ -39,7 +39,6 @@ class _FinancesScreenState extends State<FinancesScreen> with SingleTickerProvid
             indicatorColor: AppTheme.primary,
             tabs: const [
               Tab(text: 'Transactions'),
-              Tab(text: 'Bilan'),
               Tab(text: 'Charges fixes'),
             ],
           ),
@@ -49,7 +48,6 @@ class _FinancesScreenState extends State<FinancesScreen> with SingleTickerProvid
         controller: _tab,
         children: [
           _TransactionsTab(data: data),
-          _BilanTab(data: data),
           _ChargesFixesTab(data: data),
         ],
       ),
@@ -68,7 +66,7 @@ class _FinancesScreenState extends State<FinancesScreen> with SingleTickerProvid
               child: const Icon(Icons.add, color: Colors.white),
             );
           }
-          if (_tab.index == 2) {
+          if (_tab.index == 1) {
             return FloatingActionButton(
               heroTag: 'fab_cf',
               onPressed: () => showModalBottomSheet(
@@ -434,6 +432,10 @@ class _ChargesFixesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final charges = data.chargesFixes;
+    final actives = charges.where((c) => c.actif).toList();
+    final totalMensuel = actives.fold<double>(0, (s, c) => s + c.montant);
+    final totalAnnuel = totalMensuel * 12;
+
     if (charges.isEmpty) {
       return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         const Icon(Icons.repeat, size: 48, color: Colors.grey),
@@ -443,10 +445,38 @@ class _ChargesFixesTab extends StatelessWidget {
         Text('Ajoutez vos crédits, assurances...', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
       ]));
     }
-    return ListView.builder(
+
+    return ListView(
       padding: const EdgeInsets.all(16),
-      itemCount: charges.length,
-      itemBuilder: (_, i) => _ChargeFixeRow(cf: charges[i], data: data),
+      children: [
+        // Résumé
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppTheme.danger.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppTheme.danger.withOpacity(0.2)),
+          ),
+          child: Row(children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Total mensuel', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              Text(_euro.format(totalMensuel),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: AppTheme.danger)),
+            ])),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Total annuel', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              Text(_euro.format(totalAnnuel),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: AppTheme.danger)),
+            ])),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('${actives.length} actives', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              Text('sur ${charges.length}', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+            ]),
+          ]),
+        ),
+        const SizedBox(height: 16),
+        ...charges.map((cf) => _ChargeFixeRow(cf: cf, data: data)),
+      ],
     );
   }
 }
@@ -468,8 +498,8 @@ class _ChargeFixeRow extends StatelessWidget {
   String _datesCf(ChargeFixe cf) {
     final fmt = DateFormat('MM/yyyy', 'fr_FR');
     final debut = fmt.format(cf.dateDebut);
-    if (cf.dateFin == null) return 'Depuis $debut · sans fin';
-    return '$debut → \${fmt.format(cf.dateFin!)}';
+    if (cf.dateFin == null) return 'Depuis ' + debut + ' · sans fin';
+    return debut + ' → ' + fmt.format(cf.dateFin!);
   }
 
   @override
@@ -533,20 +563,53 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
   final _key = GlobalKey<FormState>();
   late final _label = TextEditingController(text: widget.charge?.label ?? '');
   late final _montant = TextEditingController(text: widget.charge != null ? widget.charge!.montant.toString() : '');
-  late TypeTransaction _type = widget.charge?.type ?? TypeTransaction.charge;
+  late String _typeCharge = _initType();
   late String? _bienId = widget.charge?.bienId;
   late DateTime _dateDebut = widget.charge?.dateDebut ?? DateTime.now();
   late DateTime? _dateFin = widget.charge?.dateFin;
+  bool _estAnnuelle = false;
   bool _saving = false;
 
-  bool get _isEdit => widget.charge != null;
+  String _initType() {
+    if (widget.charge == null) return 'credit';
+    switch (widget.charge!.type) {
+      case TypeTransaction.charge: return 'credit';
+      case TypeTransaction.assurance: return 'assurance';
+      case TypeTransaction.taxe: return 'taxe';
+      default: return 'credit';
+    }
+  }
+
+  TypeTransaction get _dartType {
+    switch (_typeCharge) {
+      case 'assurance': return TypeTransaction.assurance;
+      case 'taxe': return TypeTransaction.taxe;
+      default: return TypeTransaction.charge;
+    }
+  }
+
+  List<DropdownMenuItem<String?>> get _biensItems {
+    if (_typeCharge == 'taxe') {
+      return [
+        const DropdownMenuItem(value: null, child: Text('Sélectionner')),
+        ...widget.data.immeubles.map((i) =>
+            DropdownMenuItem(value: i.id, child: Text('Immeuble: ' + i.nom))),
+        ...widget.data.biensSansImmeuble.map((b) =>
+            DropdownMenuItem(value: b.id, child: Text(b.nom))),
+      ];
+    }
+    return [
+      const DropdownMenuItem(value: null, child: Text('Global (tous les biens)')),
+      ...widget.data.biens.map((b) => DropdownMenuItem(value: b.id, child: Text(b.nom))),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
-        initialChildSize: 0.7,
+        initialChildSize: 0.85,
         expand: false,
         builder: (_, ctrl) => Form(
           key: _key,
@@ -556,42 +619,62 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
             children: [
               Center(child: Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
-              Text(_isEdit ? 'Modifier la charge' : 'Charge fixe mensuelle', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 6),
-              Text('Générée automatiquement le 1er de chaque mois',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              const Text('Ajouter une charge', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
               const SizedBox(height: 20),
+
+              // Type
+              Row(children: [
+                _TypeCBtn('Crédit', Icons.account_balance, _typeCharge == 'credit',
+                    () => setState(() { _typeCharge = 'credit'; _estAnnuelle = false; })),
+                const SizedBox(width: 8),
+                _TypeCBtn('Assurance', Icons.shield_outlined, _typeCharge == 'assurance',
+                    () => setState(() => _typeCharge = 'assurance')),
+                const SizedBox(width: 8),
+                _TypeCBtn('Taxe', Icons.receipt_long_outlined, _typeCharge == 'taxe',
+                    () => setState(() => _typeCharge = 'taxe')),
+              ]),
+              const SizedBox(height: 20),
+
+              // Libellé
               TextFormField(
                 controller: _label,
-                decoration: _deco('Libellé (ex: Crédit BNP, Assurance PNO)'),
+                decoration: _deco(_typeCharge == 'credit' ? 'Nom du crédit (ex: Crédit BNP)' :
+                    _typeCharge == 'assurance' ? 'Nom assurance (ex: Assurance PNO)' :
+                    'Nom taxe (ex: Taxe foncière)'),
                 validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
               ),
               const SizedBox(height: 14),
+
+              // Fréquence (assurance et taxe seulement)
+              if (_typeCharge != 'credit') ...[
+                Row(children: [
+                  Expanded(child: _FreqCBtn('Mensuelle', !_estAnnuelle,
+                      () => setState(() => _estAnnuelle = false))),
+                  const SizedBox(width: 8),
+                  Expanded(child: _FreqCBtn('Annuelle', _estAnnuelle,
+                      () => setState(() => _estAnnuelle = true))),
+                ]),
+                const SizedBox(height: 14),
+              ],
+
+              // Montant
               TextFormField(
                 controller: _montant,
                 keyboardType: TextInputType.number,
-                decoration: _deco('Mensualité (€)'),
+                decoration: _deco(_estAnnuelle ? 'Montant annuel (€)' : 'Mensualité (€)'),
                 validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
               ),
               const SizedBox(height: 14),
-              DropdownButtonFormField<TypeTransaction>(
-                value: _type,
-                decoration: _deco('Catégorie'),
-                items: [TypeTransaction.charge, TypeTransaction.assurance, TypeTransaction.taxe, TypeTransaction.autre]
-                    .map((t) => DropdownMenuItem(value: t, child: Text(t.name))).toList(),
-                onChanged: (v) => setState(() => _type = v!),
-              ),
-              const SizedBox(height: 14),
+
+              // Bien concerné
               DropdownButtonFormField<String?>(
                 value: _bienId,
-                decoration: _deco('Bien concerné (optionnel)'),
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('Global (tous les biens)')),
-                  ...widget.data.biens.map((b) => DropdownMenuItem(value: b.id, child: Text(b.nom))),
-                ],
+                decoration: _deco('Bien concerné'),
+                items: _biensItems,
                 onChanged: (v) => setState(() => _bienId = v),
               ),
               const SizedBox(height: 14),
+
               // Période
               Row(children: [
                 Expanded(child: _DatePickerCF(
@@ -600,14 +683,16 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
                   onPick: (d) { if (d != null) setState(() => _dateDebut = d); },
                 )),
                 const SizedBox(width: 12),
-                Expanded(child: _DatePickerCF(
-                  label: 'Fin (optionnel)',
-                  date: _dateFin,
-                  onPick: (d) => setState(() => _dateFin = d),
-                  nullable: true,
-                )),
+                if (_typeCharge == 'credit' || (_typeCharge == 'assurance' && !_estAnnuelle))
+                  Expanded(child: _DatePickerCF(
+                    label: 'Fin',
+                    date: _dateFin,
+                    onPick: (d) => setState(() => _dateFin = d),
+                    nullable: true,
+                  )),
               ]),
               const SizedBox(height: 20),
+
               ElevatedButton(
                 onPressed: _saving ? null : _save,
                 style: ElevatedButton.styleFrom(
@@ -617,7 +702,7 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
                 ),
                 child: _saving
                     ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                    : Text(_isEdit ? 'Enregistrer' : 'Ajouter'),
+                    : const Text('Enregistrer'),
               ),
             ],
           ),
@@ -629,25 +714,16 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
   Future<void> _save() async {
     if (!_key.currentState!.validate()) return;
     setState(() => _saving = true);
-    if (_isEdit) {
-      await widget.data.modifierChargeFixe(widget.charge!.copyWith(
-        label: _label.text,
-        montant: double.tryParse(_montant.text) ?? 0,
-        type: _type,
-        bienId: _bienId,
-        dateDebut: _dateDebut,
-        dateFin: _dateFin,
-      ));
-    } else {
-      await widget.data.ajouterChargeFixe(widget.data.nouvChargeFixe(
-        label: _label.text,
-        montant: double.tryParse(_montant.text) ?? 0,
-        type: _type,
-        bienId: _bienId,
-        dateDebut: _dateDebut,
-        dateFin: _dateFin,
-      ));
-    }
+    double montant = double.tryParse(_montant.text) ?? 0;
+    if (_estAnnuelle) montant = montant / 12;
+    await widget.data.ajouterChargeFixe(widget.data.nouvChargeFixe(
+      label: _label.text,
+      montant: montant,
+      type: _dartType,
+      bienId: _bienId,
+      dateDebut: _dateDebut,
+      dateFin: _dateFin,
+    ));
     if (mounted) Navigator.pop(context);
   }
 
@@ -657,6 +733,59 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
   );
 }
+
+class _TypeCBtn extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool active;
+  final VoidCallback onTap;
+  const _TypeCBtn(this.label, this.icon, this.active, this.onTap);
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(child: GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: active ? AppTheme.primary.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: active ? AppTheme.primary : Colors.grey[300]!),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 20, color: active ? AppTheme.primary : Colors.grey[500]),
+          const SizedBox(height: 4),
+          Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+              color: active ? AppTheme.primary : Colors.grey[600])),
+        ]),
+      ),
+    ));
+  }
+}
+
+class _FreqCBtn extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  const _FreqCBtn(this.label, this.active, this.onTap);
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: active ? AppTheme.primary.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: active ? AppTheme.primary : Colors.grey[300]!),
+        ),
+        child: Text(label, textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500,
+                color: active ? AppTheme.primary : Colors.grey[600])),
+      ),
+    );
+  }
+}
+
 
 // ─── DATE PICKER CHARGE FIXE ──────────────────────────────────────────────
 
