@@ -293,6 +293,19 @@ class ChargeFixe {
     return apresDebut && avantFin;
   }
 
+  // Nombre de mois actifs dans une année donnée
+  int moisActifsDansAnnee(int annee) {
+    if (annee < dateDebut.year) return 0;
+    if (dateFin != null && annee > dateFin!.year) return 0;
+    final moisDebut = (annee == dateDebut.year) ? dateDebut.month : 1;
+    final moisFin = (dateFin != null && annee == dateFin!.year) ? dateFin!.month : 12;
+    if (moisDebut > moisFin) return 0;
+    return moisFin - moisDebut + 1;
+  }
+
+  // Montant total pour une année donnée
+  double montantAnnee(int annee) => montant * moisActifsDansAnnee(annee);
+
   factory ChargeFixe.fromMap(Map<String, String> m) => ChargeFixe(
     id: m['id'] ?? '',
     label: m['label'] ?? '',
