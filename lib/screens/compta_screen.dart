@@ -205,7 +205,7 @@ class _ParBienTab extends StatelessWidget {
         (t.bienId == null || t.bienId!.isEmpty) &&
         t.immeubleId == immeuble.id
       ).toList();
-      // Charges fixes (taxe foncière etc.) rattachées à l'immeuble
+      // Charges fixes (taxe, factures eau/elec) rattachées à l'immeuble
       final cfCommunes = data.chargesFixes.where((cf) =>
         cf.bienId == immeuble.id
       ).toList();

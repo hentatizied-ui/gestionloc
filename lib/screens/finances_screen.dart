@@ -87,35 +87,151 @@ class _FinancesScreenState extends State<FinancesScreen> with SingleTickerProvid
 
 // ─── TRANSACTIONS ──────────────────────────────────────────────────────────
 
-class _TransactionsTab extends StatelessWidget {
+class _TransactionsTab extends StatefulWidget {
   final DataService data;
   const _TransactionsTab({required this.data});
+  @override
+  State<_TransactionsTab> createState() => _TransactionsTabState();
+}
+
+class _TransactionsTabState extends State<_TransactionsTab> {
+  int _annee = DateTime.now().year;
 
   @override
   Widget build(BuildContext context) {
-    final txs = data.transactions;
+    final all = widget.data.transactions.where((t) => t.date.year == _annee).toList();
+    final recettes = all.where((t) => t.isRecette).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final depenses = all.where((t) => !t.isRecette).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final totalRec = recettes.fold<double>(0, (s, t) => s + t.montant);
+    final totalDep = depenses.fold<double>(0, (s, t) => s + t.montant.abs());
+    final net = totalRec - totalDep;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // Sélecteur année
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          IconButton(icon: const Icon(Icons.chevron_left, size: 20), onPressed: () => setState(() => _annee--)),
+          Text('$_annee', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+          IconButton(icon: const Icon(Icons.chevron_right, size: 20), onPressed: () => setState(() => _annee++)),
+        ]),
+        const SizedBox(height: 8),
+
+        // KPIs
         Row(children: [
-          Expanded(child: _KpiCard('Revenus (année)', _euro.format(data.revenusAnnee), AppTheme.primary)),
+          Expanded(child: _KpiCard('Revenus $_annee', _euro.format(totalRec), AppTheme.primary)),
           const SizedBox(width: 10),
-          Expanded(child: _KpiCard('Charges (année)', _euro.format(data.chargesAnnee), AppTheme.danger)),
+          Expanded(child: _KpiCard('Dépenses $_annee', _euro.format(totalDep), AppTheme.danger)),
           const SizedBox(width: 10),
-          Expanded(child: _KpiCard('Net', _euro.format(data.revenusAnnee - data.chargesAnnee), AppTheme.blue)),
+          Expanded(child: _KpiCard('Net', _euro.format(net), net >= 0 ? AppTheme.blue : AppTheme.danger)),
         ]),
         const SizedBox(height: 20),
-        const Text('Transactions', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
-        const SizedBox(height: 8),
-        if (txs.isEmpty)
-          const Center(child: Padding(
-            padding: EdgeInsets.all(32),
-            child: Text('Aucune transaction', style: TextStyle(color: Colors.grey)),
-          ))
-        else
-          ...txs.map((tx) => _TxRow(tx: tx, data: data)),
+
+        // Recettes
+        _CollapsibleSection(
+          label: '💰 Recettes',
+          total: totalRec,
+          color: AppTheme.primary,
+          empty: 'Aucune recette en $_annee',
+          children: recettes.map((tx) => _TxRow(tx: tx, data: widget.data)).toList(),
+        ),
+        const SizedBox(height: 12),
+
+        // Dépenses
+        _CollapsibleSection(
+          label: '💸 Dépenses',
+          total: totalDep,
+          color: AppTheme.danger,
+          empty: 'Aucune dépense en $_annee',
+          children: depenses.map((tx) => _TxRow(tx: tx, data: widget.data)).toList(),
+        ),
+        const SizedBox(height: 80),
       ],
     );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  final double total;
+  final Color color;
+  const _SectionHeader(this.label, this.total, this.color);
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15))),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+        child: Text(_euro.format(total), style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: color)),
+      ),
+    ]);
+  }
+}
+
+class _EmptySection extends StatelessWidget {
+  final String msg;
+  const _EmptySection(this.msg);
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(child: Text(msg, style: TextStyle(color: Colors.grey[500], fontSize: 13))),
+    );
+  }
+}
+
+class _CollapsibleSection extends StatefulWidget {
+  final String label;
+  final double total;
+  final Color color;
+  final String empty;
+  final List<Widget> children;
+  const _CollapsibleSection({
+    required this.label, required this.total, required this.color,
+    required this.empty, required this.children,
+  });
+  @override
+  State<_CollapsibleSection> createState() => _CollapsibleSectionState();
+}
+
+class _CollapsibleSectionState extends State<_CollapsibleSection> {
+  bool _expanded = false;
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(children: [
+            Expanded(child: Text(widget.label,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15))),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                  color: widget.color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20)),
+              child: Text(_euro.format(widget.total),
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: widget.color)),
+            ),
+            const SizedBox(width: 8),
+            Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                color: Colors.grey, size: 20),
+          ]),
+        ),
+      ),
+      if (_expanded) ...[
+        const SizedBox(height: 4),
+        if (widget.children.isEmpty)
+          _EmptySection(widget.empty)
+        else
+          ...widget.children,
+      ],
+    ]);
   }
 }
 
@@ -425,18 +541,29 @@ class _BilanSansBienCard extends StatelessWidget {
 
 // ─── CHARGES FIXES ─────────────────────────────────────────────────────────
 
-class _ChargesFixesTab extends StatelessWidget {
+class _ChargesFixesTab extends StatefulWidget {
   final DataService data;
   const _ChargesFixesTab({required this.data});
+  @override
+  State<_ChargesFixesTab> createState() => _ChargesFixesTabState();
+}
+
+class _ChargesFixesTabState extends State<_ChargesFixesTab> {
+  int _annee = DateTime.now().year;
 
   @override
   Widget build(BuildContext context) {
-    final charges = data.chargesFixes;
-    final actives = charges.where((c) => c.actif).toList();
-    final totalMensuel = actives.fold<double>(0, (s, c) => s + c.montant);
-    final totalAnnuel = totalMensuel * 12;
+    final all = widget.data.chargesFixes;
 
-    if (charges.isEmpty) {
+    // Filtrer par actif pendant l'année sélectionnée
+    final credits = all.where((c) => c.type == TypeTransaction.charge && c.moisActifsDansAnnee(_annee) > 0).toList();
+    final assurances = all.where((c) => c.type == TypeTransaction.assurance && c.moisActifsDansAnnee(_annee) > 0).toList();
+    final taxes = all.where((c) => c.type == TypeTransaction.taxe && c.moisActifsDansAnnee(_annee) > 0).toList();
+    final factures = all.where((c) => c.type == TypeTransaction.facture && c.moisActifsDansAnnee(_annee) > 0).toList();
+
+    final totalAnnee = all.fold<double>(0, (s, c) => s + c.montantAnnee(_annee));
+
+    if (all.isEmpty) {
       return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         const Icon(Icons.repeat, size: 48, color: Colors.grey),
         const SizedBox(height: 12),
@@ -449,9 +576,17 @@ class _ChargesFixesTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // Sélecteur année
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          IconButton(icon: const Icon(Icons.chevron_left, size: 20), onPressed: () => setState(() => _annee--)),
+          Text('$_annee', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+          IconButton(icon: const Icon(Icons.chevron_right, size: 20), onPressed: () => setState(() => _annee++)),
+        ]),
+        const SizedBox(height: 8),
+
         // Résumé
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: AppTheme.danger.withOpacity(0.08),
             borderRadius: BorderRadius.circular(12),
@@ -459,25 +594,89 @@ class _ChargesFixesTab extends StatelessWidget {
           ),
           child: Row(children: [
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Total mensuel', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-              Text(_euro.format(totalMensuel),
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: AppTheme.danger)),
-            ])),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Total annuel', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-              Text(_euro.format(totalAnnuel),
+              Text('Total $_annee', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              Text(_euro.format(totalAnnee),
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: AppTheme.danger)),
             ])),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('${actives.length} actives', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-              Text('sur ${charges.length}', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+              Text('${credits.length + assurances.length + taxes.length + factures.length} actives',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              Text('sur ${all.length} total', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
             ]),
           ]),
         ),
         const SizedBox(height: 16),
-        ...charges.map((cf) => _ChargeFixeRow(cf: cf, data: data)),
+
+        // Crédits
+        _CfSection(label: '⚡ Crédits', items: credits, data: widget.data, annee: _annee),
+        const SizedBox(height: 8),
+        // Assurances
+        _CfSection(label: '📋 Assurances', items: assurances, data: widget.data, annee: _annee),
+        const SizedBox(height: 8),
+        // Taxes
+        _CfSection(label: '🏛 Taxes', items: taxes, data: widget.data, annee: _annee),
+        const SizedBox(height: 8),
+        // Factures
+        _CfSection(label: '🧾 Factures', items: factures, data: widget.data, annee: _annee),
+        const SizedBox(height: 80),
       ],
     );
+  }
+}
+
+class _CfSection extends StatefulWidget {
+  final String label;
+  final List<ChargeFixe> items;
+  final DataService data;
+  final int annee;
+  const _CfSection({required this.label, required this.items, required this.data, required this.annee});
+  @override
+  State<_CfSection> createState() => _CfSectionState();
+}
+
+class _CfSectionState extends State<_CfSection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = widget.items.fold<double>(0, (s, c) => s + c.montantAnnee(widget.annee));
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(children: [
+            Expanded(child: Text(widget.label,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14))),
+            if (widget.items.isEmpty)
+              Text('Aucune', style: TextStyle(fontSize: 12, color: Colors.grey[400]))
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                    color: AppTheme.danger.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20)),
+                child: Text(_euro.format(total),
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: AppTheme.danger)),
+              ),
+            const SizedBox(width: 8),
+            Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                color: Colors.grey, size: 20),
+          ]),
+        ),
+      ),
+      if (_expanded) ...[
+        if (widget.items.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text('Aucun élément pour ' + widget.annee.toString(),
+                style: TextStyle(fontSize: 12, color: Colors.grey[400])),
+          )
+        else
+          ...widget.items.map((cf) => _ChargeFixeRow(cf: cf, data: widget.data)),
+      ],
+    ]);
   }
 }
 
@@ -491,6 +690,7 @@ class _ChargeFixeRow extends StatelessWidget {
       case TypeTransaction.charge: return '⚡';
       case TypeTransaction.assurance: return '📋';
       case TypeTransaction.taxe: return '🏛';
+      case TypeTransaction.facture: return '🧾';
       default: return '💳';
     }
   }
@@ -505,6 +705,13 @@ class _ChargeFixeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bien = data.getBienById(cf.bienId);
+    String _nomBienOuImmeuble() {
+      if (bien != null) return bien.nom;
+      if (cf.bienId == null || cf.bienId!.isEmpty) return 'Global';
+      try { return data.immeubles.firstWhere((i) => i.id == cf.bienId).nom; } catch (_) {}
+      return cf.bienId!;
+    }
+    final nomCible = _nomBienOuImmeuble();
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -522,7 +729,7 @@ class _ChargeFixeRow extends StatelessWidget {
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(cf.label, style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13,
                 color: cf.actif ? Colors.black : Colors.grey)),
-            Text(bien != null ? bien.nom : 'Charge globale',
+            Text(nomCible,
                 style: TextStyle(fontSize: 11, color: Colors.grey[600])),
             Text(_datesCf(cf), style: TextStyle(fontSize: 10, color: Colors.grey[500])),
           ])),
@@ -561,21 +768,42 @@ class FormChargeFixe extends StatefulWidget {
 
 class _FormChargeFixeState extends State<FormChargeFixe> {
   final _key = GlobalKey<FormState>();
-  late final _label = TextEditingController(text: widget.charge?.label ?? '');
-  late final _montant = TextEditingController(text: widget.charge != null ? widget.charge!.montant.toString() : '');
+  late final _label = TextEditingController();
+  late final _montant = TextEditingController(text: () {
+    if (widget.charge == null) return '';
+    if (widget.charge!.estAnnuelle) {
+      // Show annual amount (stored as monthly)
+      final annuel = widget.charge!.montant * 12;
+      return annuel % 1 == 0 ? annuel.toInt().toString() : annuel.toStringAsFixed(0);
+    }
+    return widget.charge!.montant.toString();
+  }());
   late String _typeCharge = _initType();
-  late String? _bienId = widget.charge?.bienId;
+  String? _bienId;
   late DateTime _dateDebut = widget.charge?.dateDebut ?? DateTime.now();
   late DateTime? _dateFin = widget.charge?.dateFin;
   int? _anneeSelectionnee;
 
+  bool _estAnnuelle = false;
+  String _sousTypeFacture = 'eau';
+  bool _saving = false;
+
   @override
   void initState() {
     super.initState();
+    _typeCharge = _initType();
+    _bienId = widget.charge?.bienId;
+    _dateDebut = widget.charge?.dateDebut ?? DateTime.now();
+    _dateFin = widget.charge?.dateFin;
     _anneeSelectionnee = widget.charge?.dateDebut.year;
+    _label.text = widget.charge?.label ?? '';
+    if (widget.charge != null) {
+      _estAnnuelle = widget.charge!.estAnnuelle;
+      _montant.text = widget.charge!.estAnnuelle
+          ? (widget.charge!.montant * 12).toStringAsFixed(0)
+          : widget.charge!.montant.toString();
+    }
   }
-  bool _estAnnuelle = false;
-  bool _saving = false;
 
   String _initType() {
     if (widget.charge == null) return 'credit';
@@ -583,6 +811,7 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
       case TypeTransaction.charge: return 'credit';
       case TypeTransaction.assurance: return 'assurance';
       case TypeTransaction.taxe: return 'taxe';
+      case TypeTransaction.facture: return 'facture';
       default: return 'credit';
     }
   }
@@ -591,24 +820,33 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
     switch (_typeCharge) {
       case 'assurance': return TypeTransaction.assurance;
       case 'taxe': return TypeTransaction.taxe;
+      case 'facture': return TypeTransaction.facture;
       default: return TypeTransaction.charge;
     }
   }
 
   List<DropdownMenuItem<String?>> get _biensItems {
-    if (_typeCharge == 'taxe') {
-      return [
+    if (_typeCharge == 'taxe' || _typeCharge == 'facture') {
+      final seen = <String?>{null};
+      final items = <DropdownMenuItem<String?>>[
         const DropdownMenuItem(value: null, child: Text('Sélectionner')),
-        ...widget.data.immeubles.map((i) =>
-            DropdownMenuItem(value: i.id, child: Text('Immeuble: ' + i.nom))),
-        ...widget.data.biensSansImmeuble.map((b) =>
-            DropdownMenuItem(value: b.id, child: Text(b.nom))),
       ];
+      for (final i in widget.data.immeubles) {
+        if (seen.add(i.id)) items.add(DropdownMenuItem(value: i.id, child: Text('🏢 ' + i.nom)));
+      }
+      for (final b in widget.data.biensSansImmeuble) {
+        if (seen.add(b.id)) items.add(DropdownMenuItem(value: b.id, child: Text('🏠 ' + b.nom)));
+      }
+      return items;
     }
-    return [
+    final seen = <String?>{null};
+    final items = <DropdownMenuItem<String?>>[
       const DropdownMenuItem(value: null, child: Text('Global (tous les biens)')),
-      ...widget.data.biens.map((b) => DropdownMenuItem(value: b.id, child: Text(b.nom))),
     ];
+    for (final b in widget.data.biens) {
+      if (seen.add(b.id)) items.add(DropdownMenuItem(value: b.id, child: Text(b.nom)));
+    }
+    return items;
   }
 
   @override
@@ -632,21 +870,47 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
               // Type
               Row(children: [
                 _TypeCBtn('Crédit', Icons.account_balance, _typeCharge == 'credit',
+                    widget.charge != null && _typeCharge != 'credit' ? null :
                     () => setState(() { _typeCharge = 'credit'; _estAnnuelle = false; _anneeSelectionnee = null; })),
                 const SizedBox(width: 8),
                 _TypeCBtn('Assurance', Icons.shield_outlined, _typeCharge == 'assurance',
+                    widget.charge != null && _typeCharge != 'assurance' ? null :
                     () => setState(() { _typeCharge = 'assurance'; _anneeSelectionnee = null; })),
                 const SizedBox(width: 8),
                 _TypeCBtn('Taxe', Icons.receipt_long_outlined, _typeCharge == 'taxe',
+                    widget.charge != null && _typeCharge != 'taxe' ? null :
                     () => setState(() { _typeCharge = 'taxe'; _anneeSelectionnee = null; })),
+                const SizedBox(width: 8),
+                _TypeCBtn('Facture', Icons.bolt_outlined, _typeCharge == 'facture',
+                    widget.charge != null && _typeCharge != 'facture' ? null :
+                    () => setState(() { _typeCharge = 'facture'; _anneeSelectionnee = null; })),
               ]),
               const SizedBox(height: 20),
 
               // Libellé
+              // Sous-type facture
+              if (_typeCharge == 'facture') ...[
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(children: [
+                    _SousTypeBtn('Eau', '💧', _sousTypeFacture == 'eau', () => setState(() { _sousTypeFacture = 'eau'; _label.text = 'Facture Eau'; })),
+                    const SizedBox(width: 8),
+                    _SousTypeBtn('Électricité', '⚡', _sousTypeFacture == 'electricite', () => setState(() { _sousTypeFacture = 'electricite'; _label.text = 'Facture Électricité'; })),
+                    const SizedBox(width: 8),
+                    _SousTypeBtn('Gaz', '🔥', _sousTypeFacture == 'gaz', () => setState(() { _sousTypeFacture = 'gaz'; _label.text = 'Facture Gaz'; })),
+                    const SizedBox(width: 8),
+                    _SousTypeBtn('Internet', '📶', _sousTypeFacture == 'internet', () => setState(() { _sousTypeFacture = 'internet'; _label.text = 'Facture Internet'; })),
+                    const SizedBox(width: 8),
+                    _SousTypeBtn('Autre', '📄', _sousTypeFacture == 'autre', () => setState(() { _sousTypeFacture = 'autre'; _label.text = ''; })),
+                  ]),
+                ),
+                const SizedBox(height: 14),
+              ],
               TextFormField(
                 controller: _label,
                 decoration: _deco(_typeCharge == 'credit' ? 'Nom du crédit (ex: Crédit BNP)' :
                     _typeCharge == 'assurance' ? 'Nom assurance (ex: Assurance PNO)' :
+                    _typeCharge == 'facture' ? 'Libellé facture' :
                     'Nom taxe (ex: Taxe foncière)'),
                 validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
               ),
@@ -675,7 +939,7 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
 
               // Bien concerné
               DropdownButtonFormField<String?>(
-                value: _bienId,
+                value: _biensItems.any((item) => item.value == _bienId) ? _bienId : null,
                 decoration: _deco('Bien concerné'),
                 items: _biensItems,
                 onChanged: (v) => setState(() => _bienId = v),
@@ -683,7 +947,7 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
               const SizedBox(height: 14),
 
               // Période
-              if (_typeCharge == 'taxe' && _estAnnuelle) ...[
+              if ((_typeCharge == 'taxe' || _typeCharge == 'facture') && _estAnnuelle) ...[
                 // Taxe annuelle : saisie de l'année uniquement
                 if (_anneeSelectionnee == null)
                   GestureDetector(
@@ -731,7 +995,10 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
                     onPick: (d) { if (d != null) setState(() => _dateDebut = d); },
                   )),
                   const SizedBox(width: 12),
-                  if (_typeCharge == 'credit' || (_typeCharge == 'assurance' && !_estAnnuelle))
+                  if (_typeCharge == 'credit' ||
+                      (_typeCharge == 'assurance' && !_estAnnuelle) ||
+                      (_typeCharge == 'facture' && !_estAnnuelle) ||
+                      (_typeCharge == 'taxe' && !_estAnnuelle))
                     Expanded(child: _DatePickerCF(
                       label: 'Fin',
                       date: _dateFin,
@@ -762,7 +1029,7 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
 
   Future<void> _save() async {
     if (!_key.currentState!.validate()) return;
-    if (_typeCharge == 'taxe' && _estAnnuelle && _anneeSelectionnee == null) {
+    if ((_typeCharge == 'taxe' || _typeCharge == 'facture') && _estAnnuelle && _anneeSelectionnee == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Veuillez sélectionner une année fiscale')),
       );
@@ -806,25 +1073,29 @@ class _TypeCBtn extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool active;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   const _TypeCBtn(this.label, this.icon, this.active, this.onTap);
   @override
   Widget build(BuildContext context) {
+    final disabled = onTap == null && !active;
     return Expanded(child: GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: active ? AppTheme.primary.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: active ? AppTheme.primary : Colors.grey[300]!),
+      child: Opacity(
+        opacity: disabled ? 0.35 : 1.0,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: active ? AppTheme.primary.withOpacity(0.1) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: active ? AppTheme.primary : Colors.grey[300]!),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 20, color: active ? AppTheme.primary : Colors.grey[500]),
+            const SizedBox(height: 4),
+            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+                color: active ? AppTheme.primary : Colors.grey[600])),
+          ]),
         ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 20, color: active ? AppTheme.primary : Colors.grey[500]),
-          const SizedBox(height: 4),
-          Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
-              color: active ? AppTheme.primary : Colors.grey[600])),
-        ]),
       ),
     ));
   }
@@ -854,6 +1125,36 @@ class _FreqCBtn extends StatelessWidget {
   }
 }
 
+
+// ─── SOUS TYPE FACTURE BTN ───────────────────────────────────────────────
+
+class _SousTypeBtn extends StatelessWidget {
+  final String label;
+  final String emoji;
+  final bool active;
+  final VoidCallback onTap;
+  const _SousTypeBtn(this.label, this.emoji, this.active, this.onTap);
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: active ? AppTheme.primary.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: active ? AppTheme.primary : Colors.grey[300]!),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(emoji, style: const TextStyle(fontSize: 14)),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+              color: active ? AppTheme.primary : Colors.grey[600])),
+        ]),
+      ),
+    );
+  }
+}
 
 // ─── ANNEE DIALOG ────────────────────────────────────────────────────────
 

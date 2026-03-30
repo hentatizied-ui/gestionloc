@@ -199,7 +199,7 @@ class Locataire {
 
 // ─── TRANSACTION ───────────────────────────────────────────────────────────
 
-enum TypeTransaction { loyer, charge, reparation, assurance, taxe, autre }
+enum TypeTransaction { loyer, charge, reparation, assurance, taxe, facture, autre }
 
 class Transaction {
   final String id;

@@ -86,15 +86,31 @@ class DataService extends ChangeNotifier {
   StatutPaiement getStatutLocataire(Locataire loc) {
     if (loc.bienId == null || loc.bienId!.isEmpty) return StatutPaiement.aJour;
     final now = DateTime.now();
-    final moisCourant = DateTime(now.year, now.month, 1);
-    final moisPrecedent = DateTime(now.year, now.month - 1, 1);
     final loyers = getLoyers(loc.bienId!);
-    final moisCourantPaye = loyers.any((t) =>
-        t.date.year == moisCourant.year && t.date.month == moisCourant.month);
-    final moisPrecedentPaye = loyers.any((t) =>
-        t.date.year == moisPrecedent.year && t.date.month == moisPrecedent.month);
-    if (!moisCourantPaye && !moisPrecedentPaye) return StatutPaiement.retardCritique;
-    if (!moisCourantPaye) return StatutPaiement.enRetard;
+
+    // Compter tous les mois impayés depuis le début du bail jusqu'au mois courant inclus
+    int moisImpayes = 0;
+    DateTime cursor = DateTime(loc.debutBail.year, loc.debutBail.month, 1);
+    final moisCourant = DateTime(now.year, now.month, 1);
+
+    while (!cursor.isAfter(moisCourant)) {
+      final estPaye = loyers.any((t) =>
+          t.date.year == cursor.year && t.date.month == cursor.month);
+      if (!estPaye) moisImpayes++;
+      cursor = DateTime(cursor.year, cursor.month + 1, 1);
+    }
+
+    // Si le mois courant n'est pas encore le 5, on ne compte pas le mois courant comme retard
+    final grace = now.day < 5;
+    if (grace) {
+      // Ne pas compter le mois courant
+      final moisCourantPaye = loyers.any((t) =>
+          t.date.year == moisCourant.year && t.date.month == moisCourant.month);
+      if (moisCourantPaye) {} else moisImpayes = (moisImpayes - 1).clamp(0, 999);
+    }
+
+    if (moisImpayes > 1) return StatutPaiement.retardCritique;
+    if (moisImpayes == 1) return StatutPaiement.enRetard;
     return StatutPaiement.aJour;
   }
 
