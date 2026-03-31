@@ -211,8 +211,9 @@ class Transaction {
   final DateTime date;
   final String? locataireId;
   final String? note;
+  final String? justificatif; // URL Drive
 
-  Transaction({required this.id, this.bienId, this.immeubleId, required this.label, required this.montant, required this.type, required this.date, this.locataireId, this.note});
+  Transaction({required this.id, this.bienId, this.immeubleId, required this.label, required this.montant, required this.type, required this.date, this.locataireId, this.note, this.justificatif});
 
   bool get isRecette => montant > 0;
 
@@ -228,7 +229,13 @@ class Transaction {
     note: m['note'],
   );
 
-  List<String> toRow() => [id, bienId ?? '', immeubleId ?? '', label, montant.toString(), type.name, date.toIso8601String().substring(0, 10), locataireId ?? '', note ?? ''];
+  List<String> toRow() => [id, bienId ?? '', immeubleId ?? '', label, montant.toString(), type.name, date.toIso8601String().substring(0, 10), locataireId ?? '', note ?? '', justificatif ?? ''];
+
+  Transaction copyWith({String? label, double? montant, TypeTransaction? type, String? bienId, String? immeubleId, DateTime? date, String? locataireId, String? note, Object? justificatif = _sentinel}) =>
+    Transaction(id: id, label: label ?? this.label, montant: montant ?? this.montant,
+      type: type ?? this.type, bienId: bienId ?? this.bienId, immeubleId: immeubleId ?? this.immeubleId,
+      date: date ?? this.date, locataireId: locataireId ?? this.locataireId, note: note ?? this.note,
+      justificatif: justificatif == _sentinel ? this.justificatif : justificatif as String?);
 }
 
 // ─── TICKET ────────────────────────────────────────────────────────────────
@@ -280,11 +287,12 @@ class ChargeFixe {
   final DateTime dateDebut;
   final DateTime? dateFin;
   final bool estAnnuelle; // true si l'utilisateur a saisi un montant annuel
+  final String? justificatif; // URL Drive
 
   ChargeFixe({
     required this.id, required this.label, required this.montant,
     required this.type, this.bienId, required this.dateDebut,
-    this.dateFin, this.estAnnuelle = false,
+    this.dateFin, this.estAnnuelle = false, this.justificatif,
   });
 
   bool get actif {
@@ -316,6 +324,7 @@ class ChargeFixe {
     dateDebut: DateTime.tryParse(m['dateDebut'] ?? '') ?? DateTime.now(),
     dateFin: m['dateFin']?.isNotEmpty == true ? DateTime.tryParse(m['dateFin']!) : null,
     estAnnuelle: m['estAnnuelle'] == 'OUI',
+    justificatif: m['justificatif']?.isNotEmpty == true ? m['justificatif'] : null,
   );
 
   List<String> toRow() => [
@@ -323,9 +332,10 @@ class ChargeFixe {
     bienId ?? '', dateDebut.toIso8601String().substring(0, 10),
     dateFin?.toIso8601String().substring(0, 10) ?? '',
     estAnnuelle ? 'OUI' : 'NON',
+    justificatif ?? '',
   ];
 
-  ChargeFixe copyWith({String? label, double? montant, TypeTransaction? type, Object? bienId = _sentinel, DateTime? dateDebut, Object? dateFin = _sentinel, bool? estAnnuelle}) =>
+  ChargeFixe copyWith({String? label, double? montant, TypeTransaction? type, Object? bienId = _sentinel, DateTime? dateDebut, Object? dateFin = _sentinel, bool? estAnnuelle, Object? justificatif = _sentinel}) =>
     ChargeFixe(
       id: id, label: label ?? this.label, montant: montant ?? this.montant,
       type: type ?? this.type,
@@ -333,5 +343,6 @@ class ChargeFixe {
       dateDebut: dateDebut ?? this.dateDebut,
       dateFin: dateFin == _sentinel ? this.dateFin : dateFin as DateTime?,
       estAnnuelle: estAnnuelle ?? this.estAnnuelle,
+      justificatif: justificatif == _sentinel ? this.justificatif : justificatif as String?,
     );
 }

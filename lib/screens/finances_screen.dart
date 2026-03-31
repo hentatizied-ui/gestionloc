@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../services/data_service.dart';
+import '../services/justificatif_service.dart';
 import '../models/models.dart';
 import '../main.dart';
 
@@ -740,6 +741,12 @@ class _ChargeFixeRow extends StatelessWidget {
             const SizedBox(height: 4),
 
           ]),
+          if (cf.justificatif != null && cf.justificatif!.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.visibility_outlined, size: 18, color: AppTheme.primary),
+              tooltip: 'Voir le justificatif',
+              onPressed: () => JustificatifService.ouvrir(cf.justificatif!),
+            ),
           IconButton(
             icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.grey),
             onPressed: () => showModalBottomSheet(
@@ -787,6 +794,8 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
   bool _estAnnuelle = false;
   String _sousTypeFacture = 'eau';
   bool _saving = false;
+  bool _uploadingJustif = false;
+  String? _justificatif;
 
   @override
   void initState() {
@@ -802,6 +811,7 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
       _montant.text = widget.charge!.estAnnuelle
           ? (widget.charge!.montant * 12).toStringAsFixed(0)
           : widget.charge!.montant.toString();
+      _justificatif = widget.charge!.justificatif;
     }
   }
 
@@ -1007,6 +1017,47 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
                     )),
                 ]),
               ],
+              const SizedBox(height: 16),
+
+              // Justificatif
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[350]!),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.attach_file, size: 18, color: Colors.grey),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _justificatif != null
+                        ? Text('Justificatif joint', style: TextStyle(color: Colors.green[700], fontSize: 13))
+                        : const Text('Aucun justificatif', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  ),
+                  if (_uploadingJustif)
+                    const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  else ...[
+                    if (_justificatif != null) ...[
+                      IconButton(
+                        icon: const Icon(Icons.visibility_outlined, size: 18),
+                        padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+                        onPressed: () => JustificatifService.ouvrir(_justificatif!),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: Icon(Icons.delete_outline, size: 18, color: Colors.red[300]),
+                        padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+                        onPressed: () => setState(() => _justificatif = null),
+                      ),
+                    ] else
+                      TextButton(
+                        onPressed: _uploadJustif,
+                        style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+                        child: const Text('Joindre', style: TextStyle(fontSize: 13)),
+                      ),
+                  ],
+                ]),
+              ),
               const SizedBox(height: 20),
 
               ElevatedButton(
@@ -1025,6 +1076,17 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
         ),
       ),
     );
+  }
+
+  Future<void> _uploadJustif() async {
+    final source = await JustificatifService.choisirSource(context);
+    if (source == null || !mounted) return;
+    setState(() => _uploadingJustif = true);
+    final url = await JustificatifService.uploadFichier(
+      entiteId: widget.charge?.id ?? 'cf_new',
+      source: source,
+    );
+    if (mounted) setState(() { _uploadingJustif = false; if (url != null) _justificatif = url; });
   }
 
   Future<void> _save() async {
@@ -1047,6 +1109,7 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
         dateDebut: _dateDebut,
         dateFin: _dateFin,
         estAnnuelle: _estAnnuelle,
+        justificatif: _justificatif,
       ));
     } else {
       await widget.data.ajouterChargeFixe(widget.data.nouvChargeFixe(
@@ -1057,7 +1120,7 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
         dateDebut: _dateDebut,
         dateFin: _dateFin,
         estAnnuelle: _estAnnuelle,
-      ));
+      ).copyWith(justificatif: _justificatif));
     }
     if (mounted) Navigator.pop(context);
   }
@@ -1708,5 +1771,56 @@ class _TF extends StatelessWidget {
         validator: (v) => v == null || v.isEmpty ? 'Champ requis' : null,
       ),
     );
+  }
+}
+
+// ─── JUSTIFICATIF BTN ─────────────────────────────────────────────────────
+
+class _JustificatifBtn extends StatefulWidget {
+  final String? url;
+  final Future<void> Function(String url) onUpload;
+  final String entiteId;
+  const _JustificatifBtn({required this.url, required this.onUpload, required this.entiteId});
+  @override
+  State<_JustificatifBtn> createState() => _JustificatifBtnState();
+}
+
+class _JustificatifBtnState extends State<_JustificatifBtn> {
+  bool _loading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasJustif = widget.url != null && widget.url!.isNotEmpty;
+    return _loading
+        ? const SizedBox(width: 18, height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2))
+        : IconButton(
+            icon: Icon(
+              hasJustif ? Icons.attach_file : Icons.attach_file_outlined,
+              size: 18,
+              color: hasJustif ? AppTheme.primary : Colors.grey[400],
+            ),
+            tooltip: hasJustif ? 'Voir le justificatif' : 'Ajouter un justificatif',
+            onPressed: () => hasJustif ? _ouvrir() : _ajouter(),
+          );
+  }
+
+  void _ouvrir() => JustificatifService.ouvrir(widget.url!);
+
+  void _ajouter() async {
+    final source = await JustificatifService.choisirSource(context);
+    if (source == null || !mounted) return;
+    setState(() => _loading = true);
+    final url = await JustificatifService.uploadFichier(
+      entiteId: widget.entiteId,
+      source: source,
+    );
+    if (url != null) await widget.onUpload(url);
+    if (mounted) setState(() => _loading = false);
+    if (url != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Justificatif ajouté ✓'), backgroundColor: Colors.green),
+      );
+    }
   }
 }
