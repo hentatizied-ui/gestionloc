@@ -1087,9 +1087,8 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
       source: source,
     );
     if (url != null) _justificatif = url;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() => _uploadingJustif = false);
-    });
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (mounted) setState(() => _uploadingJustif = false);
   }
 
   Future<void> _save() async {
