@@ -227,6 +227,7 @@ class Transaction {
     date: DateTime.tryParse(m['date'] ?? '') ?? DateTime.now(),
     locataireId: m['locataireId'],
     note: m['note'],
+    justificatif: m['justificatif']?.isNotEmpty == true ? m['justificatif'] : null,
   );
 
   List<String> toRow() => [id, bienId ?? '', immeubleId ?? '', label, montant.toString(), type.name, date.toIso8601String().substring(0, 10), locataireId ?? '', note ?? '', justificatif ?? ''];

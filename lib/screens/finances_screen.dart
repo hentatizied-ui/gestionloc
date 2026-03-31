@@ -1086,7 +1086,13 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
       entiteId: widget.charge?.id ?? 'cf_new',
       source: source,
     );
-    if (url != null) _justificatif = url;
+    if (url != null) {
+      _justificatif = url;
+      // Auto-sauvegarder immédiatement dans Sheets pour les charges existantes
+      if (widget.charge != null) {
+        await widget.data.modifierChargeFixe(widget.charge!.copyWith(justificatif: url));
+      }
+    }
     await Future.delayed(const Duration(milliseconds: 300));
     if (mounted) setState(() => _uploadingJustif = false);
   }
@@ -1111,7 +1117,7 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
         dateDebut: _dateDebut,
         dateFin: _dateFin,
         estAnnuelle: _estAnnuelle,
-        justificatif: _justificatif,
+        justificatif: _justificatif ?? widget.charge!.justificatif,
       ));
     } else {
       await widget.data.ajouterChargeFixe(widget.data.nouvChargeFixe(

@@ -172,6 +172,11 @@ class DataService extends ChangeNotifier {
       _locataires = results[2].map(Locataire.fromMap).toList();
       _transactions = results[3].map(Transaction.fromMap).toList();
       _tickets = results[4].map(Ticket.fromMap).toList();
+      debugPrint('--- ChargesFixe raw (${results[5].length} lignes) ---');
+      for (final row in results[5].take(3)) {
+        debugPrint('keys: ${row.keys.toList()}');
+        debugPrint('justificatif key="${row['justificatif']}"');
+      }
       _chargesFixes = results[5].map(ChargeFixe.fromMap).toList();
       _transactions.sort((a, b) => b.date.compareTo(a.date));
       await _genererChargesFixesMois();

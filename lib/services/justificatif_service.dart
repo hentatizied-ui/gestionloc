@@ -53,15 +53,26 @@ class JustificatifService {
 
       final uri = Uri.parse(_proxyUrl);
       final sheetName = entiteId.startsWith('cf_') ? 'ChargesFixe' : 'Transactions';
-      debugPrint('Upload: envoi de $fileName ($mimeType), ${bytes.length} octets');
-      final resp = await http.post(uri, body: {
+      final body = {
         'secret': _secret,
         'action': 'upload',
         'sheet': sheetName,
         'fileData': base64Data,
-        'fileName': fileName,
-        'mimeType': mimeType,
-      });
+        'fileName': fileName!,
+        'mimeType': mimeType!,
+      };
+      debugPrint('Upload: envoi de $fileName ($mimeType), ${bytes.length} octets');
+
+      // Google Apps Script renvoie un 302 redirect sur mobile
+      // On suit le redirect manuellement si la réponse est du HTML
+      var resp = await http.post(uri, body: body);
+      if (resp.body.trimLeft().startsWith('<')) {
+        final match = RegExp(r'HREF="([^"]+)"', caseSensitive: false).firstMatch(resp.body);
+        if (match != null) {
+          final redirectUrl = match.group(1)!.replaceAll('&amp;', '&');
+          resp = await http.get(Uri.parse(redirectUrl));
+        }
+      }
 
       debugPrint('Upload: status=${resp.statusCode}');
       debugPrint('Upload: body=${resp.body}');

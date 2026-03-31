@@ -38,7 +38,7 @@ class SheetsService extends ChangeNotifier {
   Future<List<Map<String, String>>> readSheetAsMap(String sheetName) async {
     final rows = await readSheet(sheetName);
     if (rows.isEmpty) return [];
-    final headers = rows.first;
+    final headers = rows.first.map((h) => h.trim()).toList();
     final result = <Map<String, String>>[];
     for (int i = 1; i < rows.length; i++) {
       final row = rows[i];
@@ -51,13 +51,31 @@ class SheetsService extends ChangeNotifier {
     return result;
   }
 
+  // ── Helper POST (évite les limites GET + redirects Google) ─────────────
+
+  Future<Map<String, dynamic>> _post(Map<String, String> body) async {
+    final uri = Uri.parse(_proxyUrl);
+    var resp = await http.post(uri, body: body);
+    if (resp.body.trimLeft().startsWith('<')) {
+      final match = RegExp(r'HREF="([^"]+)"', caseSensitive: false).firstMatch(resp.body);
+      if (match != null) {
+        final redirectUrl = match.group(1)!.replaceAll('&amp;', '&');
+        resp = await http.get(Uri.parse(redirectUrl));
+      }
+    }
+    return jsonDecode(resp.body) as Map<String, dynamic>;
+  }
+
   // ── Ajouter une ligne ───────────────────────────────────────────────────
 
   Future<bool> appendRow(String sheetName, List<String> values) async {
     try {
-      final url = Uri.parse('$_proxyUrl?secret=$_secret&action=append&sheet=${Uri.encodeComponent(sheetName)}&row=${Uri.encodeComponent(jsonEncode(values))}');
-      final response = await http.get(url);
-      final data = jsonDecode(response.body);
+      final data = await _post({
+        'secret': _secret,
+        'action': 'append',
+        'sheet': sheetName,
+        'row': jsonEncode(values),
+      });
       return data['success'] == true;
     } catch (e) {
       debugPrint('appendRow error: $e');
@@ -69,9 +87,14 @@ class SheetsService extends ChangeNotifier {
 
   Future<bool> updateRow(String sheetName, String id, List<String> values) async {
     try {
-      final url = Uri.parse('$_proxyUrl?secret=$_secret&action=update&sheet=${Uri.encodeComponent(sheetName)}&id=${Uri.encodeComponent(id)}&row=${Uri.encodeComponent(jsonEncode(values))}');
-      final response = await http.get(url);
-      final data = jsonDecode(response.body);
+      final data = await _post({
+        'secret': _secret,
+        'action': 'update',
+        'sheet': sheetName,
+        'id': id,
+        'row': jsonEncode(values),
+      });
+      if (data['success'] != true) debugPrint('updateRow failed: $sheetName/$id → $data');
       return data['success'] == true;
     } catch (e) {
       debugPrint('updateRow error: $e');
@@ -83,9 +106,12 @@ class SheetsService extends ChangeNotifier {
 
   Future<bool> deleteRow(String sheetName, String id) async {
     try {
-      final url = Uri.parse('$_proxyUrl?secret=$_secret&action=delete&sheet=${Uri.encodeComponent(sheetName)}&id=${Uri.encodeComponent(id)}');
-      final response = await http.get(url);
-      final data = jsonDecode(response.body);
+      final data = await _post({
+        'secret': _secret,
+        'action': 'delete',
+        'sheet': sheetName,
+        'id': id,
+      });
       return data['success'] == true;
     } catch (e) {
       debugPrint('deleteRow error: $e');
