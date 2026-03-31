@@ -80,9 +80,11 @@ class JustificatifService {
 
   /// Ouvre le justificatif dans le navigateur
   static Future<void> ouvrir(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
+    try {
+      final uri = Uri.parse(url);
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('Erreur ouverture justificatif: $e');
     }
   }
 

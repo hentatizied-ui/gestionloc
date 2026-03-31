@@ -1086,7 +1086,8 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
       entiteId: widget.charge?.id ?? 'cf_new',
       source: source,
     );
-    if (mounted) setState(() { _uploadingJustif = false; if (url != null) _justificatif = url; });
+    if (url != null) _justificatif = url;
+    if (mounted) setState(() => _uploadingJustif = false);
   }
 
   Future<void> _save() async {
