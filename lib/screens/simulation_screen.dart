@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/sheets_service.dart';
+import '../main.dart'; // Pour AppTheme
 
 final _euro = NumberFormat.currency(locale: 'fr_FR', symbol: '€', decimalDigits: 0);
 
@@ -381,9 +382,9 @@ class _SimulationScreenState extends State<SimulationScreen> {
                     thumbColor: Colors.white,
                     overlayColor: AppTheme.primary.withValues(alpha: 0.2),
                     tickMarkShape: const RoundSliderTickMarkShape(tickMarkRadius: 2),
-                    tickMarkColor: Colors.grey[600],
-                    activeTickMarkColor: AppTheme.primary,
-                    showValueIndicator: ShowValueIndicator.disabled,
+                    tickMarkActiveColor: AppTheme.primary,
+                    tickMarkInactiveColor: Colors.grey[600],
+                    showValueIndicator: ShowValueIndicator.never,
                   ),
                   child: Slider(
                     value: _anneesDisponibles.indexOf(_anneeSelection).toDouble(),
