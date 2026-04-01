@@ -167,45 +167,43 @@ class _SimulationScreenState extends State<SimulationScreen> {
         }
 
         if (dateDebut != null) {
-          // Lire tous les capitaux (colonne E) et intérêts (colonne F) PAR BATCHES
-          // Pour éviter de dépasser les quotas Google Apps Script (invocations simultanées)
+          // Lire TOUTES les données capital/intérêts en UN SEUL appel via readRange
+          // Cela évite les quotas Google et réduit le temps de 100s à ~2-3s
           final moisAConsulter = _amortissement.clamp(0, 360);
-          List<double> capitaux = List.filled(moisAConsulter, 0);
-          List<double> interets = List.filled(moisAConsulter, 0);
+          if (moisAConsulter == 0) {
+            debugPrint('Aucun mois à consulter');
+            return;
+          }
 
-          const batchSize = 10; // Nombre max de cellules par batch
-          debugPrint('Lecture par batches de $batchSize cellules (total: ${moisAConsulter} mois)');
+          debugPrint('Lecture plage E10:F${9 + moisAConsulter} (${moisAConsulter} mois)');
 
-          for (int i = 0; i < moisAConsulter; i += batchSize) {
-            final batchEnd = (i + batchSize).clamp(0, moisAConsulter);
-            List<Future<double?>> batchCapitaux = [];
-            List<Future<double?>> batchInterets = [];
+          // Lire la plage complète E10:F[dernière ligne]
+          final rangeData = await sheets.readRange('Emprunt', 'E10:F${9 + moisAConsulter}');
+          debugPrint('Données lues: ${rangeData.length} lignes');
 
-            for (int j = i; j < batchEnd; j++) {
-              final ligne = 10 + j;
-              batchCapitaux.add(sheets.readCell('Emprunt', 'E$ligne'));
-              batchInterets.add(sheets.readCell('Emprunt', 'F$ligne'));
-            }
+          if (rangeData.isEmpty) {
+            debugPrint('Aucune donnée reçue depuis Sheets');
+            return;
+          }
 
-            // Attendre ce batch
-            final batchResultCap = await Future.wait(batchCapitaux);
-            final batchResultInt = await Future.wait(batchInterets);
+          // Extraire les colonnes capital (E) et intérêts (F)
+          List<double> capitaux = [];
+          List<double> interets = [];
 
-            // Stocker les résultats
-            for (int k = 0; k < batchResultCap.length; k++) {
-              if (batchResultCap[k] != null) capitaux[i + k] = batchResultCap[k]!;
-              if (batchResultInt[k] != null) interets[i + k] = batchResultInt[k]!;
-            }
-
-            debugPrint('Batch ${i ~/ batchSize + 1} terminé (cellules ${i + 1} à $batchEnd)');
-
-            // Petit délai entre batches pour éviter de saturer l'API Google
-            if (batchEnd < moisAConsulter) {
-              await Future.delayed(const Duration(milliseconds: 200));
+          for (int i = 0; i < rangeData.length && i < moisAConsulter; i++) {
+            final row = rangeData[i];
+            if (row.length >= 2) {
+              final cap = double.tryParse(row[0]?.toString() ?? '');
+              final intt = double.tryParse(row[1]?.toString() ?? '');
+              capitaux.add(cap ?? 0);
+              interets.add(intt ?? 0);
+            } else {
+              capitaux.add(0);
+              interets.add(0);
             }
           }
 
-          debugPrint('Nombre total de mensualités lues: ${interets.length}');
+          debugPrint('Extraction: ${capitaux.length} capitaux, ${interets.length} intérêts');
 
           // Regrouper par année
           for (int i = 0; i < interets.length; i++) {

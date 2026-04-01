@@ -128,6 +128,36 @@ class SheetsService extends ChangeNotifier {
     }
   }
 
+  // ── Lire une plage de cellules (optimisé pour lectures massives) ─────────
+
+  Future<List<List<dynamic>>> readRange(String sheetName, String rangeA1) async {
+    try {
+      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=readRange&sheet=${Uri.encodeComponent(sheetName)}&range=${Uri.encodeComponent(rangeA1)}');
+      final response = await http.get(url).timeout(AppConfig.httpTimeout);
+
+      if (response.statusCode != 200) {
+        debugPrint('readRange HTTP ${response.statusCode} ($sheetName!$rangeA1): ${response.body}');
+        return [];
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (data['success'] != true) {
+        debugPrint('readRange API error ($sheetName!$rangeA1): ${data['error']}');
+        return [];
+      }
+
+      final values = data['values'] as List<dynamic>?;
+      if (values == null) return [];
+
+      // Convertir en List<List<dynamic>>
+      return values.map((row) => (row as List<dynamic>).toList()).toList();
+    } catch (e) {
+      debugPrint('readRange exception ($sheetName!$rangeA1): $e');
+      return [];
+    }
+  }
+
   Future<bool> writeCell(String sheetName, String cell, dynamic value) async {
     try {
       final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=writeCell&sheet=${Uri.encodeComponent(sheetName)}&cell=${Uri.encodeComponent(cell)}&value=${Uri.encodeComponent(value.toString())}');
