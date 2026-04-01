@@ -735,6 +735,72 @@ class _SimulationScreenState extends State<SimulationScreen> {
             ]),
           ),
           const SizedBox(height: 32),
+
+          // ── Cash Flow Annuel et Déficit Foncier ──────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Column(children: [
+              _LigneCalculee(
+                label: '💰 Cash Flow Annuel',
+                valeur: _resultatNet - _capitalAnnee(),
+                actif: true,
+                suffix: '€',
+                couleur: const Color(0xFF4CAF50),
+              ),
+              const SizedBox(height: 12),
+              _LigneCalculee(
+                label: '🏛️ Déficit Foncier (35%)',
+                valeur: _resultatNet * 0.35,
+                actif: true,
+                suffix: '€',
+                couleur: const Color(0xFFEF5350),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Taux de Rentabilité ───────────────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Column(children: [
+              _LigneCalculee(
+                label: '💵 Cash Flow par mois',
+                valeur: (_resultatNet - _capitalAnnee()) / 12,
+                actif: true,
+                suffix: '€',
+                couleur: const Color(0xFF4CAF50),
+              ),
+              const SizedBox(height: 8),
+              _LigneCalculee(
+                label: '📈 Taux de Rentabilité Brut',
+                valeur: (_loyerAnnuel / _credit) * 100,
+                actif: _credit > 0,
+                suffix: '%',
+                couleur: const Color(0xFF1565C0),
+              ),
+              const SizedBox(height: 8),
+              _LigneCalculee(
+                label: '📉 Taux de Rentabilité Net',
+                valeur: ((_resultatNet - _capitalAnnee()) / _credit) * 100,
+                actif: _credit > 0,
+                suffix: '%',
+                couleur: const Color(0xFF4CAF50),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 32),
         ],
       ]),
     );
@@ -776,7 +842,8 @@ class _LigneCalculee extends StatelessWidget {
   final double valeur;
   final bool actif;
   final String suffix;
-  const _LigneCalculee({required this.label, required this.valeur, required this.actif, this.suffix = '€'});
+  final Color? couleur;
+  const _LigneCalculee({required this.label, required this.valeur, required this.actif, this.suffix = '€', this.couleur});
 
   @override
   Widget build(BuildContext context) {
@@ -788,6 +855,7 @@ class _LigneCalculee extends StatelessWidget {
       displayText = formatSansDevise.format(valeur);
       if (suffix.isNotEmpty) displayText += ' $suffix';
     }
+    final textColor = couleur ?? (actif ? const Color(0xFF1B5E20) : Colors.grey);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
@@ -796,44 +864,17 @@ class _LigneCalculee extends StatelessWidget {
         border: Border.all(color: Colors.grey[300]!),
       ),
       child: Row(children: [
-        Expanded(child: Text(label, style: TextStyle(color: Colors.grey[700], fontSize: 14))),
+        Expanded(child: Text(label, style: TextStyle(color: textColor, fontSize: 14))),
         Text(
           actif ? displayText : '—',
           style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 14,
-            color: actif ? const Color(0xFF1B5E20) : Colors.grey,
+            color: textColor,
           ),
         ),
       ]),
     );
-  }
-}
-
-class _BlocResultat extends StatelessWidget {
-  final String label;
-  final String sousTitre;
-  final double valeur;
-  final Color couleur;
-  final bool grand;
-  const _BlocResultat({
-    required this.label, required this.sousTitre,
-    required this.valeur, required this.couleur, this.grand = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(children: [
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: TextStyle(color: Colors.grey[800], fontSize: grand ? 14 : 13, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 2),
-        Text(sousTitre, style: const TextStyle(color: Colors.grey, fontSize: 11)),
-      ])),
-      Text(
-        _euro.format(valeur),
-        style: TextStyle(color: couleur, fontSize: grand ? 20 : 16, fontWeight: FontWeight.w700),
-      ),
-    ]);
   }
 }
 
@@ -985,40 +1026,6 @@ class _RecettesChargesSection extends StatelessWidget {
       _Champ(label: 'Taxe foncière (annuelle)',   controller: taxeFonciere,  onChanged: (_) => {}),
       const SizedBox(height: 24),
 
-      // ── Résultats ──
-      if (_totalLoyers > 0 || _totalCharges > 0) Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFFE8E8E8), width: 0.5),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(children: [
-            _BlocResultat(
-              label: 'Recettes mensuelles',
-              sousTitre: typeBien == 'immeuble' ? '${loyers.length} appartement(s)' : 'Loyer mensuel',
-              valeur: _totalLoyers,
-              couleur: AppTheme.primary,
-            ),
-            const Divider(color: Color(0xFFE8E8E8), height: 28),
-            _BlocResultat(
-              label: 'Charges mensuelles',
-              sousTitre: 'Charges annuelles ÷ 12',
-              valeur: _totalCharges,
-              couleur: AppTheme.danger,
-            ),
-            const Divider(color: Color(0xFFE8E8E8), height: 28),
-            _BlocResultat(
-              label: 'Cash-flow',
-              sousTitre: 'Recettes - Charges',
-              valeur: _cashflow,
-              couleur: _cashflow >= 0 ? AppTheme.primary : AppTheme.danger,
-              grand: true,
-            ),
-          ]),
-        ),
-      ),
       const SizedBox(height: 32),
     ]);
   }
