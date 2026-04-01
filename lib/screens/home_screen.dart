@@ -7,6 +7,7 @@ import 'biens_screen.dart';
 import 'locataires_screen.dart';
 import 'finances_screen.dart';
 import 'compta_screen.dart';
+import 'simulation_screen.dart';
 import 'splash_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -20,10 +21,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _screens = const [
     DashboardScreen(), BiensScreen(), LocatairesScreen(),
-    FinancesScreen(), MaintenanceScreen(), ComptaScreen(),
+    FinancesScreen(), ComptaScreen(), SimulationScreen(),
   ];
 
-  final List<String> _titles = ['Tableau de bord', 'Mes Biens', 'Locataires', 'Finances', 'Maintenance', 'Comptabilité'];
+  final List<String> _titles = ['Tableau de bord', 'Mes Biens', 'Locataires', 'Finances', 'Comptabilité', 'Simulation'];
 
   @override
   Widget build(BuildContext context) {
@@ -81,8 +82,8 @@ class _HomeScreenState extends State<HomeScreen> {
             BottomNavigationBarItem(icon: Icon(Icons.home_work_outlined), label: 'Biens'),
             BottomNavigationBarItem(icon: Icon(Icons.people_outline), label: 'Locataires'),
             BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_outlined), label: 'Finances'),
-            BottomNavigationBarItem(icon: Icon(Icons.build_outlined), label: 'Travaux'),
             BottomNavigationBarItem(icon: Icon(Icons.bar_chart_outlined), label: 'Compta'),
+            BottomNavigationBarItem(icon: Icon(Icons.calculate_outlined), label: 'Simulation'),
           ],
         ),
       ),

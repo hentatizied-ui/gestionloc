@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 import 'sheets_service.dart';
+import 'justificatif_service.dart';
 
 const _uuid = Uuid();
 
@@ -172,11 +173,6 @@ class DataService extends ChangeNotifier {
       _locataires = results[2].map(Locataire.fromMap).toList();
       _transactions = results[3].map(Transaction.fromMap).toList();
       _tickets = results[4].map(Ticket.fromMap).toList();
-      debugPrint('--- ChargesFixe raw (${results[5].length} lignes) ---');
-      for (final row in results[5].take(3)) {
-        debugPrint('keys: ${row.keys.toList()}');
-        debugPrint('justificatif key="${row['justificatif']}"');
-      }
       _chargesFixes = results[5].map(ChargeFixe.fromMap).toList();
       _transactions.sort((a, b) => b.date.compareTo(a.date));
       await _genererChargesFixesMois();
@@ -278,7 +274,18 @@ class DataService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> modifierTransaction(Transaction tx) async {
+    final i = _transactions.indexWhere((t) => t.id == tx.id);
+    if (i >= 0) _transactions[i] = tx;
+    await _sheets?.updateRow('Transactions', tx.id, tx.toRow());
+    notifyListeners();
+  }
+
   Future<void> supprimerTransaction(String id) async {
+    final tx = _transactions.firstWhere((t) => t.id == id);
+    if (tx.justificatif != null && tx.justificatif!.isNotEmpty) {
+      await JustificatifService.supprimerFichier(tx.justificatif!);
+    }
     _transactions.removeWhere((t) => t.id == id);
     await _sheets?.deleteRow('Transactions', id);
     notifyListeners();
@@ -345,6 +352,10 @@ class DataService extends ChangeNotifier {
   }
 
   Future<void> supprimerChargeFixe(String id) async {
+    final cf = _chargesFixes.firstWhere((c) => c.id == id);
+    if (cf.justificatif != null && cf.justificatif!.isNotEmpty) {
+      await JustificatifService.supprimerFichier(cf.justificatif!);
+    }
     _chargesFixes.removeWhere((c) => c.id == id);
     await _sheets?.deleteRow('ChargesFixe', id);
     notifyListeners();

@@ -1,11 +1,10 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
 
 class SheetsService extends ChangeNotifier {
-  static const String _proxyUrl = 'https://script.google.com/macros/s/AKfycbwjxQYCPNSjz_y47f01nJJ-4qEx-vwlHcbdNCndf--oG4gGz7Y7rEuD-xS07c-iKDNB/exec';
-  static const String _secret = 'gestionloc2024';
-
   final bool _isReady = true;
   bool get isReady => _isReady;
 
@@ -13,25 +12,30 @@ class SheetsService extends ChangeNotifier {
 
   Future<List<List<String>>> readSheet(String sheetName) async {
     try {
-      final url = Uri.parse('$_proxyUrl?secret=$_secret&action=read&sheet=${Uri.encodeComponent(sheetName)}');
-      final response = await http.get(url);
+      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=read&sheet=${Uri.encodeComponent(sheetName)}');
+      final response = await http.get(url).timeout(
+        AppConfig.httpTimeout,
+        onTimeout: () => throw TimeoutException('Timeout lecture feuille "$sheetName" après ${AppConfig.httpTimeout.inSeconds}s'),
+      );
+
       if (response.statusCode != 200) {
-        debugPrint('Sheets read error: ${response.body}');
-        return [];
+        throw HttpException('HTTP ${response.statusCode} lors de la lecture de "$sheetName"', uri: url);
       }
-      final data = jsonDecode(response.body);
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
       if (data['error'] != null) {
-        debugPrint('Sheets error: ${data['error']}');
-        return [];
+        throw Exception('Erreur Sheets: ${data['error']}');
       }
+
       final values = data['values'] as List<dynamic>?;
       if (values == null || values.isEmpty) return [];
+
       return values.map((row) =>
         (row as List<dynamic>).map((c) => c.toString()).toList()
       ).toList();
     } catch (e) {
       debugPrint('readSheet error ($sheetName): $e');
-      return [];
+      rethrow;
     }
   }
 
@@ -51,34 +55,20 @@ class SheetsService extends ChangeNotifier {
     return result;
   }
 
-  // ── Helper POST (évite les limites GET + redirects Google) ─────────────
-
-  Future<Map<String, dynamic>> _post(Map<String, String> body) async {
-    final uri = Uri.parse(_proxyUrl);
-    var resp = await http.post(uri, body: body);
-    if (resp.body.trimLeft().startsWith('<')) {
-      final match = RegExp(r'HREF="([^"]+)"', caseSensitive: false).firstMatch(resp.body);
-      if (match != null) {
-        final redirectUrl = match.group(1)!.replaceAll('&amp;', '&');
-        resp = await http.get(Uri.parse(redirectUrl));
-      }
-    }
-    return jsonDecode(resp.body) as Map<String, dynamic>;
-  }
-
   // ── Ajouter une ligne ───────────────────────────────────────────────────
 
   Future<bool> appendRow(String sheetName, List<String> values) async {
     try {
-      final data = await _post({
-        'secret': _secret,
-        'action': 'append',
-        'sheet': sheetName,
-        'row': jsonEncode(values),
-      });
+      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=append&sheet=${Uri.encodeComponent(sheetName)}&row=${Uri.encodeComponent(jsonEncode(values))}');
+      final response = await http.get(url).timeout(AppConfig.httpTimeout);
+      if (response.statusCode != 200) {
+        debugPrint('appendRow HTTP error ${response.statusCode}: ${response.body}');
+        return false;
+      }
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
       return data['success'] == true;
     } catch (e) {
-      debugPrint('appendRow error: $e');
+      debugPrint('appendRow error ($sheetName): $e');
       return false;
     }
   }
@@ -87,17 +77,75 @@ class SheetsService extends ChangeNotifier {
 
   Future<bool> updateRow(String sheetName, String id, List<String> values) async {
     try {
-      final data = await _post({
-        'secret': _secret,
-        'action': 'update',
-        'sheet': sheetName,
-        'id': id,
-        'row': jsonEncode(values),
-      });
-      if (data['success'] != true) debugPrint('updateRow failed: $sheetName/$id → $data');
+      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=update&sheet=${Uri.encodeComponent(sheetName)}&id=${Uri.encodeComponent(id)}&row=${Uri.encodeComponent(jsonEncode(values))}');
+      final response = await http.get(url).timeout(AppConfig.httpTimeout);
+      if (response.statusCode != 200) {
+        debugPrint('updateRow HTTP error ${response.statusCode}: ${response.body}');
+        return false;
+      }
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
       return data['success'] == true;
     } catch (e) {
-      debugPrint('updateRow error: $e');
+      debugPrint('updateRow error ($sheetName/$id): $e');
+      return false;
+    }
+  }
+
+  // ── Lire / écrire une cellule ──────────────────────────────────────────
+
+  Future<double?> readCell(String sheetName, String cell) async {
+    try {
+      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=readCell&sheet=${Uri.encodeComponent(sheetName)}&cell=${Uri.encodeComponent(cell)}');
+      final response = await http.get(url).timeout(AppConfig.httpTimeout);
+
+      if (response.statusCode != 200) {
+        debugPrint('readCell HTTP ${response.statusCode} ($sheetName!$cell): ${response.body}');
+        return null;
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (data['success'] != true) {
+        debugPrint('readCell API error ($sheetName!$cell): ${data['error']}');
+        return null;
+      }
+
+      final rawValue = data['value'];
+      if (rawValue == null || rawValue.toString().isEmpty) {
+        return null;
+      }
+
+      final parsed = double.tryParse(rawValue.toString());
+      if (parsed == null) {
+        debugPrint('readCell: valeur non numérique ($sheetName!$cell): $rawValue');
+      }
+      return parsed;
+    } catch (e) {
+      debugPrint('readCell exception ($sheetName!$cell): $e');
+      return null;
+    }
+  }
+
+  Future<bool> writeCell(String sheetName, String cell, dynamic value) async {
+    try {
+      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=writeCell&sheet=${Uri.encodeComponent(sheetName)}&cell=${Uri.encodeComponent(cell)}&value=${Uri.encodeComponent(value.toString())}');
+      final response = await http.get(url).timeout(AppConfig.httpTimeout);
+
+      if (response.statusCode != 200) {
+        debugPrint('writeCell HTTP error ${response.statusCode} ($sheetName!$cell=$value): ${response.body.substring(0, math.min(response.body.length, 200))}');
+        return false;
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (data['error'] != null) {
+        debugPrint('writeCell API error ($sheetName!$cell=$value): ${data['error']}');
+        return false;
+      }
+
+      return data['success'] == true;
+    } catch (e) {
+      debugPrint('writeCell exception ($sheetName!$cell=$value): $e');
       return false;
     }
   }
@@ -106,15 +154,18 @@ class SheetsService extends ChangeNotifier {
 
   Future<bool> deleteRow(String sheetName, String id) async {
     try {
-      final data = await _post({
-        'secret': _secret,
-        'action': 'delete',
-        'sheet': sheetName,
-        'id': id,
-      });
+      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=delete&sheet=${Uri.encodeComponent(sheetName)}&id=${Uri.encodeComponent(id)}');
+      final response = await http.get(url).timeout(AppConfig.httpTimeout);
+
+      if (response.statusCode != 200) {
+        debugPrint('deleteRow HTTP error ${response.statusCode} ($sheetName/$id): ${response.body}');
+        return false;
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
       return data['success'] == true;
     } catch (e) {
-      debugPrint('deleteRow error: $e');
+      debugPrint('deleteRow error ($sheetName/$id): $e');
       return false;
     }
   }

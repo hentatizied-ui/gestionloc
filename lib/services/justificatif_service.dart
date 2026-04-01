@@ -4,16 +4,30 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
-
-const _proxyUrl = 'https://script.google.com/macros/s/AKfycbwjxQYCPNSjz_y47f01nJJ-4qEx-vwlHcbdNCndf--oG4gGz7Y7rEuD-xS07c-iKDNB/exec';
-const _secret = 'gestionloc2024';
+import '../config/app_config.dart';
 
 class JustificatifService {
+
+  /// Retourne le sous-dossier Drive selon le type de charge fixe
+  static String? sousDossierPourType(String? typeName) {
+    switch (typeName) {
+      case 'charge':    return 'Justificatifs_Crédit';
+      case 'assurance': return 'Justificatifs_Assurances';
+      case 'taxe':      return 'Justificatifs_Taxes';
+      case 'facture':   return 'Justificatifs_Factures';
+      default:          return null;
+    }
+  }
+
+  /// Retourne le sous-dossier Drive selon le sens de la transaction
+  static String sousDossierPourTransaction(bool isRecette) =>
+      isRecette ? 'Recettes' : 'Dépenses';
 
   /// Upload un fichier vers Drive et retourne l'URL
   static Future<String?> uploadFichier({
     required String entiteId, // tx_xxx ou cf_xxx
     required String source,   // 'camera', 'galerie', 'fichier'
+    String? sousDossier,      // sous-dossier Drive cible
   }) async {
     try {
       List<int>? bytes;
@@ -51,41 +65,122 @@ class JustificatifService {
 
       final base64Data = base64Encode(bytes);
 
-      final uri = Uri.parse(_proxyUrl);
+      final uri = Uri.parse(AppConfig.sheetsProxyUrl);
       final sheetName = entiteId.startsWith('cf_') ? 'ChargesFixe' : 'Transactions';
-      final body = {
-        'secret': _secret,
+      final body = <String, String>{
+        'secret': AppConfig.sheetsSecret,
         'action': 'upload',
         'sheet': sheetName,
         'fileData': base64Data,
         'fileName': fileName!,
         'mimeType': mimeType!,
+        if (sousDossier != null) 'sousDossier': sousDossier,
       };
       debugPrint('Upload: envoi de $fileName ($mimeType), ${bytes.length} octets');
 
-      // Google Apps Script renvoie un 302 redirect sur mobile
-      // On suit le redirect manuellement si la réponse est du HTML
-      var resp = await http.post(uri, body: body);
-      if (resp.body.trimLeft().startsWith('<')) {
-        final match = RegExp(r'HREF="([^"]+)"', caseSensitive: false).firstMatch(resp.body);
-        if (match != null) {
-          final redirectUrl = match.group(1)!.replaceAll('&amp;', '&');
-          resp = await http.get(Uri.parse(redirectUrl));
+      try {
+        // Google Apps Script renvoie un 302 redirect sur mobile
+        // On suit le redirect manuellement si la réponse est du HTML
+        var resp = await http.post(uri, body: body).timeout(AppConfig.httpTimeout);
+
+        if (resp.body.trimLeft().startsWith('<')) {
+          final match = RegExp(r'HREF="([^"]+)"', caseSensitive: false).firstMatch(resp.body);
+          if (match != null) {
+            final redirectUrl = match.group(1)!.replaceAll('&amp;', '&');
+            resp = await http.get(Uri.parse(redirectUrl)).timeout(AppConfig.httpTimeout);
+          }
         }
-      }
 
-      debugPrint('Upload: status=${resp.statusCode}');
-      debugPrint('Upload: body=${resp.body}');
+        debugPrint('Upload: status=${resp.statusCode}');
+        debugPrint('Upload: body=${resp.body.substring(0, math.min(resp.body.length, 500))}');
 
-      final json = jsonDecode(resp.body);
-      if (json['success'] == true) {
-        return json['url'] as String;
+        if (resp.statusCode != 200) {
+          debugPrint('Upload HTTP error ${resp.statusCode}');
+          return null;
+        }
+
+        final json = jsonDecode(resp.body) as Map<String, dynamic>;
+        if (json['success'] == true) {
+          return json['url'] as String;
+        }
+        debugPrint('Upload: échec — ${json['error'] ?? 'réponse inattendue'}');
+        return null;
+      } on TimeoutException catch (e) {
+        debugPrint('Upload timeout: $e');
+        return null;
       }
-      debugPrint('Upload: échec — ${json['error'] ?? 'réponse inattendue'}');
-      return null;
     } catch (e) {
       debugPrint('Upload error: $e');
       return null;
+    }
+  }
+
+  /// Extrait le fileId depuis une URL Drive
+  static String? _extraireFileId(String url) {
+    final match = RegExp(r'/file/d/([a-zA-Z0-9_-]+)').firstMatch(url);
+    return match?.group(1);
+  }
+
+  /// Supprime le fichier de Drive
+  static Future<void> supprimerFichier(String url) async {
+    final fileId = _extraireFileId(url);
+    if (fileId == null) return;
+    try {
+      final uri = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=deleteFile&fileId=${Uri.encodeComponent(fileId)}');
+      await http.get(uri).timeout(AppConfig.httpTimeout);
+    } catch (e) {
+      debugPrint('Erreur suppression Drive: $e');
+    }
+  }
+
+  /// Vérifie si le fichier existe encore sur Drive
+  static Future<bool> fichierExiste(String url) async {
+    final fileId = _extraireFileId(url);
+    if (fileId == null) return false;
+    try {
+      final uri = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=checkFile&fileId=${Uri.encodeComponent(fileId)}');
+      final resp = await http.get(uri).timeout(AppConfig.httpTimeout);
+      if (resp.statusCode != 200) {
+        debugPrint('fichierExiste HTTP ${resp.statusCode}: ${resp.body}');
+        return false;
+      }
+      final json = jsonDecode(resp.body) as Map<String, dynamic>;
+      return json['success'] == true;
+    } catch (e) {
+      debugPrint('fichierExiste error: $e');
+      return false;
+    }
+  }
+
+  /// Ouvre le justificatif, vérifie d'abord son existence.
+  /// Si introuvable, affiche un dialog et appelle [onSupprimer] si confirmé.
+  static Future<void> ouvrirAvecVerif(
+    BuildContext context,
+    String url, {
+    required Future<void> Function() onSupprimer,
+  }) async {
+    final existe = await fichierExiste(url);
+    if (!context.mounted) return;
+    if (existe) {
+      await ouvrir(url);
+    } else {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Fichier introuvable'),
+          content: const Text('Ce fichier a été supprimé de Drive. Voulez-vous supprimer ce lien ?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await onSupprimer();
+              },
+              child: const Text('Supprimer le lien', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
+      );
     }
   }
 

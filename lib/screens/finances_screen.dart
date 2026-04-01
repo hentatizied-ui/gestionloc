@@ -299,10 +299,31 @@ class _TxRow extends StatelessWidget {
               style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14,
                   color: tx.isRecette ? AppTheme.primary : AppTheme.danger),
             ),
-            InkWell(
-              onTap: () => data.supprimerTransaction(tx.id),
-              child: const Icon(Icons.delete_outline, size: 14, color: Colors.grey),
-            ),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              if (tx.justificatif != null && tx.justificatif!.isNotEmpty)
+                InkWell(
+                  onTap: () => JustificatifService.ouvrirAvecVerif(
+                    context,
+                    tx.justificatif!,
+                    onSupprimer: () => data.supprimerTransaction(tx.id),
+                  ),
+                  child: const Icon(Icons.visibility_outlined, size: 14, color: AppTheme.primary),
+                ),
+              const SizedBox(width: 6),
+              InkWell(
+                onTap: () => showModalBottomSheet(
+                  context: context, isScrollControlled: true,
+                  shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                  builder: (_) => FormTransaction(data: data, transaction: tx),
+                ),
+                child: const Icon(Icons.edit_outlined, size: 14, color: Colors.grey),
+              ),
+              const SizedBox(width: 6),
+              InkWell(
+                onTap: () => data.supprimerTransaction(tx.id),
+                child: const Icon(Icons.delete_outline, size: 14, color: Colors.grey),
+              ),
+            ]),
           ]),
         ]),
       ),
@@ -745,7 +766,11 @@ class _ChargeFixeRow extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.visibility_outlined, size: 18, color: AppTheme.primary),
               tooltip: 'Voir le justificatif',
-              onPressed: () => JustificatifService.ouvrir(cf.justificatif!),
+              onPressed: () => JustificatifService.ouvrirAvecVerif(
+                context,
+                cf.justificatif!,
+                onSupprimer: () => data.supprimerChargeFixe(cf.id),
+              ),
             ),
           IconButton(
             icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.grey),
@@ -812,6 +837,21 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
           ? (widget.charge!.montant * 12).toStringAsFixed(0)
           : widget.charge!.montant.toString();
       _justificatif = widget.charge!.justificatif;
+      // Initialiser le sous-type facture depuis le label
+      if (_typeCharge == 'facture') {
+        final lbl = widget.charge!.label.toLowerCase();
+        if (lbl.contains('électricité') || lbl.contains('electricite')) {
+          _sousTypeFacture = 'electricite';
+        } else if (lbl.contains('gaz')) {
+          _sousTypeFacture = 'gaz';
+        } else if (lbl.contains('internet')) {
+          _sousTypeFacture = 'internet';
+        } else if (lbl.contains('eau')) {
+          _sousTypeFacture = 'eau';
+        } else {
+          _sousTypeFacture = 'autre';
+        }
+      }
     }
   }
 
@@ -903,15 +943,15 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(children: [
-                    _SousTypeBtn('Eau', '💧', _sousTypeFacture == 'eau', () => setState(() { _sousTypeFacture = 'eau'; _label.text = 'Facture Eau'; })),
+                    _SousTypeBtn('Eau', '💧', _sousTypeFacture == 'eau', widget.charge != null && _sousTypeFacture != 'eau' ? null : () => setState(() { _sousTypeFacture = 'eau'; _label.text = 'Facture Eau'; })),
                     const SizedBox(width: 8),
-                    _SousTypeBtn('Électricité', '⚡', _sousTypeFacture == 'electricite', () => setState(() { _sousTypeFacture = 'electricite'; _label.text = 'Facture Électricité'; })),
+                    _SousTypeBtn('Électricité', '⚡', _sousTypeFacture == 'electricite', widget.charge != null && _sousTypeFacture != 'electricite' ? null : () => setState(() { _sousTypeFacture = 'electricite'; _label.text = 'Facture Électricité'; })),
                     const SizedBox(width: 8),
-                    _SousTypeBtn('Gaz', '🔥', _sousTypeFacture == 'gaz', () => setState(() { _sousTypeFacture = 'gaz'; _label.text = 'Facture Gaz'; })),
+                    _SousTypeBtn('Gaz', '🔥', _sousTypeFacture == 'gaz', widget.charge != null && _sousTypeFacture != 'gaz' ? null : () => setState(() { _sousTypeFacture = 'gaz'; _label.text = 'Facture Gaz'; })),
                     const SizedBox(width: 8),
-                    _SousTypeBtn('Internet', '📶', _sousTypeFacture == 'internet', () => setState(() { _sousTypeFacture = 'internet'; _label.text = 'Facture Internet'; })),
+                    _SousTypeBtn('Internet', '📶', _sousTypeFacture == 'internet', widget.charge != null && _sousTypeFacture != 'internet' ? null : () => setState(() { _sousTypeFacture = 'internet'; _label.text = 'Facture Internet'; })),
                     const SizedBox(width: 8),
-                    _SousTypeBtn('Autre', '📄', _sousTypeFacture == 'autre', () => setState(() { _sousTypeFacture = 'autre'; _label.text = ''; })),
+                    _SousTypeBtn('Autre', '📄', _sousTypeFacture == 'autre', widget.charge != null && _sousTypeFacture != 'autre' ? null : () => setState(() { _sousTypeFacture = 'autre'; _label.text = ''; })),
                   ]),
                 ),
                 const SizedBox(height: 14),
@@ -1041,13 +1081,29 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
                       IconButton(
                         icon: const Icon(Icons.visibility_outlined, size: 18),
                         padding: EdgeInsets.zero, constraints: const BoxConstraints(),
-                        onPressed: () => JustificatifService.ouvrir(_justificatif!),
+                        onPressed: () => JustificatifService.ouvrirAvecVerif(
+                          context,
+                          _justificatif!,
+                          onSupprimer: () async {
+                            setState(() => _justificatif = null);
+                            if (widget.charge != null) {
+                              await widget.data.modifierChargeFixe(widget.charge!.copyWith(justificatif: ''));
+                            }
+                          },
+                        ),
                       ),
                       const SizedBox(width: 8),
                       IconButton(
                         icon: Icon(Icons.delete_outline, size: 18, color: Colors.red[300]),
                         padding: EdgeInsets.zero, constraints: const BoxConstraints(),
-                        onPressed: () => setState(() => _justificatif = null),
+                        onPressed: () async {
+                          final url = _justificatif!;
+                          setState(() => _justificatif = null);
+                          await JustificatifService.supprimerFichier(url);
+                          if (widget.charge != null) {
+                            await widget.data.modifierChargeFixe(widget.charge!.copyWith(justificatif: ''));
+                          }
+                        },
                       ),
                     ] else
                       TextButton(
@@ -1061,7 +1117,7 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
               const SizedBox(height: 20),
 
               ElevatedButton(
-                onPressed: _saving ? null : _save,
+                onPressed: _saving || _uploadingJustif ? null : _save,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primary, foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1085,6 +1141,7 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
     final url = await JustificatifService.uploadFichier(
       entiteId: widget.charge?.id ?? 'cf_new',
       source: source,
+      sousDossier: JustificatifService.sousDossierPourType(_dartType.name),
     );
     if (url != null) {
       _justificatif = url;
@@ -1203,25 +1260,29 @@ class _SousTypeBtn extends StatelessWidget {
   final String label;
   final String emoji;
   final bool active;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   const _SousTypeBtn(this.label, this.emoji, this.active, this.onTap);
   @override
   Widget build(BuildContext context) {
+    final disabled = onTap == null && !active;
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: active ? AppTheme.primary.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: active ? AppTheme.primary : Colors.grey[300]!),
+      child: Opacity(
+        opacity: disabled ? 0.35 : 1.0,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: active ? AppTheme.primary.withOpacity(0.1) : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: active ? AppTheme.primary : Colors.grey[300]!),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text(emoji, style: const TextStyle(fontSize: 14)),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+                color: active ? AppTheme.primary : Colors.grey[600])),
+          ]),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text(emoji, style: const TextStyle(fontSize: 14)),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
-              color: active ? AppTheme.primary : Colors.grey[600])),
-        ]),
       ),
     );
   }
@@ -1360,7 +1421,8 @@ class _DatePickerCF extends StatelessWidget {
 
 class FormTransaction extends StatefulWidget {
   final DataService data;
-  const FormTransaction({super.key, required this.data});
+  final Transaction? transaction;
+  const FormTransaction({super.key, required this.data, this.transaction});
   @override
   State<FormTransaction> createState() => _FormTransactionState();
 }
@@ -1374,13 +1436,34 @@ class _FormTransactionState extends State<FormTransaction> {
   String? _immeubleId;
   bool _isRecette = true;
   bool _saving = false;
+  bool _uploadingJustif = false;
+  String? _justificatif;
+
+  @override
+  void initState() {
+    super.initState();
+    final tx = widget.transaction;
+    if (tx != null) {
+      _label.text = tx.label;
+      _montant.text = tx.montant.abs().toString();
+      _type = tx.type;
+      _bienId = tx.bienId?.isNotEmpty == true ? tx.bienId : null;
+      _immeubleId = tx.immeubleId?.isNotEmpty == true ? tx.immeubleId : null;
+      // S'assurer que les valeurs existent dans les listes
+      if (_bienId != null && !widget.data.biens.any((b) => b.id == _bienId)) _bienId = null;
+      if (_immeubleId != null && !widget.data.immeubles.any((i) => i.id == _immeubleId)) _immeubleId = null;
+      _isRecette = tx.isRecette;
+      _justificatif = tx.justificatif?.isNotEmpty == true ? tx.justificatif : null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final isEdit = widget.transaction != null;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
-        initialChildSize: 0.75,
+        initialChildSize: 0.85,
         expand: false,
         builder: (_, ctrl) => Form(
           key: _key,
@@ -1390,12 +1473,15 @@ class _FormTransactionState extends State<FormTransaction> {
             children: [
               Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 12),
-              const Text('Nouvelle transaction', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+              Text(isEdit ? 'Modifier la transaction' : 'Nouvelle transaction',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
               const SizedBox(height: 20),
               Row(children: [
-                Expanded(child: _TypeBtn(label: 'Recette', active: _isRecette, color: AppTheme.primary, onTap: () => setState(() => _isRecette = true))),
+                Expanded(child: _TypeBtn(label: 'Recette', active: _isRecette, color: AppTheme.primary,
+                    onTap: isEdit ? null : () => setState(() => _isRecette = true))),
                 const SizedBox(width: 10),
-                Expanded(child: _TypeBtn(label: 'Dépense', active: !_isRecette, color: AppTheme.danger, onTap: () => setState(() => _isRecette = false))),
+                Expanded(child: _TypeBtn(label: 'Dépense', active: !_isRecette, color: AppTheme.danger,
+                    onTap: isEdit ? null : () => setState(() => _isRecette = false))),
               ]),
               const SizedBox(height: 16),
               TextFormField(
@@ -1437,9 +1523,67 @@ class _FormTransactionState extends State<FormTransaction> {
                 ],
                 onChanged: (v) => setState(() => _immeubleId = v),
               ),
+              const SizedBox(height: 14),
+              // ── Justificatif ──
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[400]!),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.attach_file, size: 18, color: Colors.grey),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _justificatif != null
+                        ? Text('Justificatif joint', style: TextStyle(color: Colors.green[700], fontSize: 13))
+                        : const Text('Aucun justificatif', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  ),
+                  if (_uploadingJustif)
+                    const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  else ...[
+                    if (_justificatif != null) ...[
+                      IconButton(
+                        icon: const Icon(Icons.visibility_outlined, size: 18),
+                        padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+                        onPressed: () => JustificatifService.ouvrirAvecVerif(
+                          context,
+                          _justificatif!,
+                          onSupprimer: () async {
+                            final url = _justificatif!;
+                            setState(() => _justificatif = null);
+                            await JustificatifService.supprimerFichier(url);
+                            if (widget.transaction != null) {
+                              await widget.data.modifierTransaction(widget.transaction!.copyWith(justificatif: ''));
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: Icon(Icons.delete_outline, size: 18, color: Colors.red[300]),
+                        padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+                        onPressed: () async {
+                          final url = _justificatif!;
+                          setState(() => _justificatif = null);
+                          await JustificatifService.supprimerFichier(url);
+                          if (widget.transaction != null) {
+                            await widget.data.modifierTransaction(widget.transaction!.copyWith(justificatif: ''));
+                          }
+                        },
+                      ),
+                    ] else
+                      TextButton(
+                        onPressed: _uploadJustif,
+                        style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+                        child: const Text('Joindre', style: TextStyle(fontSize: 13)),
+                      ),
+                  ],
+                ]),
+              ),
               const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: _saving ? null : _save,
+                onPressed: _saving || _uploadingJustif ? null : _save,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _isRecette ? AppTheme.primary : AppTheme.danger,
                   foregroundColor: Colors.white,
@@ -1457,14 +1601,42 @@ class _FormTransactionState extends State<FormTransaction> {
     );
   }
 
+  Future<void> _uploadJustif() async {
+    final source = await JustificatifService.choisirSource(context);
+    if (source == null || !mounted) return;
+    setState(() => _uploadingJustif = true);
+    final url = await JustificatifService.uploadFichier(
+      entiteId: widget.transaction?.id ?? 'tx_new',
+      source: source,
+      sousDossier: JustificatifService.sousDossierPourTransaction(_isRecette),
+    );
+    if (url != null) {
+      _justificatif = url;
+      if (widget.transaction != null) {
+        await widget.data.modifierTransaction(widget.transaction!.copyWith(justificatif: url));
+      }
+    }
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (mounted) setState(() => _uploadingJustif = false);
+  }
+
   Future<void> _save() async {
     if (!_key.currentState!.validate()) return;
-
     setState(() => _saving = true);
     final montant = (double.tryParse(_montant.text) ?? 0) * (_isRecette ? 1 : -1);
-    await widget.data.ajouterTransaction(widget.data.nouvTransaction(
-      label: _label.text, montant: montant, type: _type, bienId: _bienId, immeubleId: _immeubleId,
-    ));
+    if (widget.transaction != null) {
+      await widget.data.modifierTransaction(widget.transaction!.copyWith(
+        label: _label.text, montant: montant, type: _type,
+        bienId: _bienId, immeubleId: _immeubleId,
+        justificatif: _justificatif ?? widget.transaction!.justificatif,
+      ));
+    } else {
+      final tx = widget.data.nouvTransaction(
+        label: _label.text, montant: montant, type: _type,
+        bienId: _bienId, immeubleId: _immeubleId,
+      );
+      await widget.data.ajouterTransaction(tx.copyWith(justificatif: _justificatif));
+    }
     if (mounted) Navigator.pop(context);
   }
 
@@ -1479,7 +1651,7 @@ class _TypeBtn extends StatelessWidget {
   final String label;
   final bool active;
   final Color color;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   const _TypeBtn({required this.label, required this.active, required this.color, required this.onTap});
 
   @override
@@ -1813,7 +1985,11 @@ class _JustificatifBtnState extends State<_JustificatifBtn> {
           );
   }
 
-  void _ouvrir() => JustificatifService.ouvrir(widget.url!);
+  void _ouvrir() => JustificatifService.ouvrirAvecVerif(
+    context,
+    widget.url!,
+    onSupprimer: () => widget.onUpload(''),
+  );
 
   void _ajouter() async {
     final source = await JustificatifService.choisirSource(context);
