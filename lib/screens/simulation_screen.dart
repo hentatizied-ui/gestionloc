@@ -67,6 +67,24 @@ class _SimulationScreenState extends State<SimulationScreen> {
     return _capitalParAnnee[_anneeSelection] ?? 0;
   }
 
+  // --- Getters pour cash-flow (après emprunt) ---
+  double get _totalLoyers {
+    double sum = 0;
+    for (final c in _loyers) {
+      sum += double.tryParse(c.text.replaceAll(',', '.')) ?? 0;
+    }
+    return sum;
+  }
+
+  double get _totalChargesMensuelles {
+    final assurance = double.tryParse(_assurancePno.text.replaceAll(',', '.')) ?? 0;
+    final copro = double.tryParse(_copropriete.text.replaceAll(',', '.')) ?? 0;
+    final taxe = double.tryParse(_taxeFonciere.text.replaceAll(',', '.')) ?? 0;
+    return (assurance + copro + taxe) / 12;
+  }
+
+  double get _cashflow => _totalLoyers - _totalChargesMensuelles;
+
   // ── Méthodes ──────────────────────────────────────────────────────────────
   void _updateNbApparts(int nb) {
     setState(() {
@@ -375,7 +393,9 @@ class _SimulationScreenState extends State<SimulationScreen> {
                 // Flèche gauche
                 IconButton(
                   icon: const Icon(Icons.chevron_left),
-                  color: _anneeSelection > _anneesDisponibles.first ? Colors.white : Colors.grey,
+                  color: _anneeSelection > _anneesDisponibles.first
+                      ? Colors.green
+                      : Colors.grey.withOpacity(0.3), // plus visible même désactivée
                   onPressed: _anneeSelection > _anneesDisponibles.first
                       ? () {
                           setState(() {
@@ -408,7 +428,9 @@ class _SimulationScreenState extends State<SimulationScreen> {
                 // Flèche droite
                 IconButton(
                   icon: const Icon(Icons.chevron_right),
-                  color: _anneeSelection < _anneesDisponibles.last ? Colors.white : Colors.grey,
+                  color: _anneeSelection < _anneesDisponibles.last
+                      ? Colors.green
+                      : Colors.grey.withOpacity(0.3), // plus visible même désactivée
                   onPressed: _anneeSelection < _anneesDisponibles.last
                       ? () {
                           setState(() {
@@ -455,6 +477,16 @@ class _SimulationScreenState extends State<SimulationScreen> {
                 grand: true,
               ),
             ]),
+          ),
+          const SizedBox(height: 24),
+          const Text('Cash-flow mensuel', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 12),
+          _ResultatsCashFlow(
+            totalLoyers: _totalLoyers,
+            totalCharges: _totalChargesMensuelles,
+            cashflow: _cashflow,
+            typeBien: _typeBien,
+            nbApparts: _nbApparts,
           ),
           const SizedBox(height: 32),
         ],
@@ -739,5 +771,83 @@ class _RecettesChargesSection extends StatelessWidget {
       ),
       const SizedBox(height: 32),
     ]);
+  }
+}
+
+// ── Widget cash-flow après emprunt ─────────────────────────────────────────────
+class _ResultatsCashFlow extends StatelessWidget {
+  final double totalLoyers;
+  final double totalCharges;
+  final double cashflow;
+  final String typeBien;
+  final int nbApparts;
+
+  const _ResultatsCashFlow({
+    required this.totalLoyers,
+    required this.totalCharges,
+    required this.cashflow,
+    required this.typeBien,
+    required this.nbApparts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(children: [
+        // Recettes mensuelles
+        Row(children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Recettes mensuelles', style: TextStyle(color: const Color(0xFF4CAF50), fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(
+                  typeBien == 'immeuble' ? '$nbApparts appartement(s)' : 'Loyer mensuel',
+                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          Text(_euro.format(totalLoyers), style: const TextStyle(color: Color(0xFF4CAF50), fontSize: 16, fontWeight: FontWeight.w700)),
+        ]),
+        const SizedBox(height: 12),
+        // Charges mensuelles
+        Row(children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Charges mensuelles', style: TextStyle(color: const Color(0xFFEF5350), fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                const Text('Charges annuelles ÷ 12', style: TextStyle(color: Colors.white54, fontSize: 11)),
+              ],
+            ),
+          ),
+          Text(_euro.format(totalCharges), style: const TextStyle(color: Color(0xFFEF5350), fontSize: 16, fontWeight: FontWeight.w700)),
+        ]),
+        const Divider(color: Colors.white24, height: 24),
+        // Cash-flow
+        Row(children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Cash-flow', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                const Text('Recettes - Charges', style: TextStyle(color: Colors.white54, fontSize: 11)),
+              ],
+            ),
+          ),
+          Text(_euro.format(cashflow), style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
+        ]),
+      ]),
+    );
   }
 }
