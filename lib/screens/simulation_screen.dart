@@ -367,74 +367,59 @@ class _SimulationScreenState extends State<SimulationScreen> {
           const Text('Résultats emprunt', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
 
-          // Navigation des années (slider centré avec marqueurs)
+          // Navigation des années (flèches simples centrées)
           if (_anneesDisponibles.length > 1)
-            Column(
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Slider horizontal
-                SliderTheme(
-                  data: SliderThemeData(
-                    trackHeight: 4,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
-                    activeTrackColor: AppTheme.primary,
-                    inactiveTrackColor: Colors.grey[700],
-                    thumbColor: Colors.white,
-                    overlayColor: AppTheme.primary.withValues(alpha: 0.2),
-                    tickMarkShape: const RoundSliderTickMarkShape(tickMarkRadius: 2),
-                    activeTickMarkColor: AppTheme.primary,
-                    inactiveTickMarkColor: Colors.grey[600],
-                    showValueIndicator: ShowValueIndicator.never,
+                // Flèche gauche
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  color: _anneeSelection > _anneesDisponibles.first ? Colors.white : Colors.grey,
+                  onPressed: _anneeSelection > _anneesDisponibles.first
+                      ? () {
+                          setState(() {
+                            _anneeSelection = _anneesDisponibles[_anneesDisponibles.indexOf(_anneeSelection) - 1];
+                          });
+                        }
+                      : null,
+                  iconSize: 32,
+                  padding: const EdgeInsets.all(12),
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Année précédente',
+                ),
+                // Année sélectionnée (centrée)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
                   ),
-                  child: Slider(
-                    value: _anneesDisponibles.indexOf(_anneeSelection).toDouble(),
-                    min: 0,
-                    max: (_anneesDisponibles.length - 1).toDouble(),
-                    divisions: _anneesDisponibles.length - 1,
-                    onChanged: (value) {
-                      setState(() {
-                        _anneeSelection = _anneesDisponibles[value.toInt()];
-                      });
-                    },
+                  child: Text(
+                    'Année $_anneeSelection',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primary,
+                    ),
                   ),
                 ),
-                // Marqueurs d'années (labels sous le slider)
-                SizedBox(
-                  height: 24,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      ..._anneesDisponibles.map((annee) {
-                        // Afficher seulement certaines années si trop nombreuses
-                        final shouldShow = _anneesDisponibles.length <= 10 ||
-                            annee % 5 == 0 ||
-                            annee == _anneesDisponibles.first ||
-                            annee == _anneesDisponibles.last;
-                        if (!shouldShow) return const SizedBox.shrink();
-                        final isSelected = annee == _anneeSelection;
-                        return Expanded(
-                          child: Text(
-                            annee.toString(),
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: isSelected ? AppTheme.primary : Colors.grey[600],
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ],
-                  ),
-                ),
-                // Label de l'année sélectionnée (centré)
-                const SizedBox(height: 8),
-                Text(
-                  'Année $_anneeSelection',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+                // Flèche droite
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  color: _anneeSelection < _anneesDisponibles.last ? Colors.white : Colors.grey,
+                  onPressed: _anneeSelection < _anneesDisponibles.last
+                      ? () {
+                          setState(() {
+                            _anneeSelection = _anneesDisponibles[_anneesDisponibles.indexOf(_anneeSelection) + 1];
+                          });
+                        }
+                      : null,
+                  iconSize: 32,
+                  padding: const EdgeInsets.all(12),
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Année suivante',
                 ),
               ],
             ),
