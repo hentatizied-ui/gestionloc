@@ -167,17 +167,45 @@ class _SimulationScreenState extends State<SimulationScreen> {
         }
 
         if (dateDebut != null) {
-          // Lire tous les capitaux (colonne E) et intérêts (colonne F)
-          List<Future<double?>> futCapitaux = [];
-          List<Future<double?>> futInterets = [];
-          for (int i = 0; i < _amortissement && i < 360; i++) {
-            final ligne = 10 + i;
-            futCapitaux.add(sheets.readCell('Emprunt', 'E$ligne'));
-            futInterets.add(sheets.readCell('Emprunt', 'F$ligne'));
+          // Lire tous les capitaux (colonne E) et intérêts (colonne F) PAR BATCHES
+          // Pour éviter de dépasser les quotas Google Apps Script (invocations simultanées)
+          final moisAConsulter = _amortissement.clamp(0, 360);
+          List<double> capitaux = List.filled(moisAConsulter, 0);
+          List<double> interets = List.filled(moisAConsulter, 0);
+
+          const batchSize = 10; // Nombre max de cellules par batch
+          debugPrint('Lecture par batches de $batchSize cellules (total: ${moisAConsulter} mois)');
+
+          for (int i = 0; i < moisAConsulter; i += batchSize) {
+            final batchEnd = (i + batchSize).clamp(0, moisAConsulter);
+            List<Future<double?>> batchCapitaux = [];
+            List<Future<double?>> batchInterets = [];
+
+            for (int j = i; j < batchEnd; j++) {
+              final ligne = 10 + j;
+              batchCapitaux.add(sheets.readCell('Emprunt', 'E$ligne'));
+              batchInterets.add(sheets.readCell('Emprunt', 'F$ligne'));
+            }
+
+            // Attendre ce batch
+            final batchResultCap = await Future.wait(batchCapitaux);
+            final batchResultInt = await Future.wait(batchInterets);
+
+            // Stocker les résultats
+            for (int k = 0; k < batchResultCap.length; k++) {
+              if (batchResultCap[k] != null) capitaux[i + k] = batchResultCap[k]!;
+              if (batchResultInt[k] != null) interets[i + k] = batchResultInt[k]!;
+            }
+
+            debugPrint('Batch ${i ~/ batchSize + 1} terminé (cellules ${i + 1} à $batchEnd)');
+
+            // Petit délai entre batches pour éviter de saturer l'API Google
+            if (batchEnd < moisAConsulter) {
+              await Future.delayed(const Duration(milliseconds: 200));
+            }
           }
-          final capitaux = await Future.wait(futCapitaux);
-          final interets = await Future.wait(futInterets);
-          debugPrint('Nombre de mensualités lues: ${interets.length}');
+
+          debugPrint('Nombre total de mensualités lues: ${interets.length}');
 
           // Regrouper par année
           for (int i = 0; i < interets.length; i++) {
