@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:math';
+import 'package:flutter/foundation.dart'; // Pour kDebugMode
+import 'package:flutter/services.dart'; // Pour TextInputFormatter
 import '../services/sheets_service.dart';
+import '../config/app_config.dart'; // Pour config Sheets
 import '../main.dart'; // Pour AppTheme
 
 final _euro = NumberFormat.currency(locale: 'fr_FR', symbol: '€', decimalDigits: 0);
@@ -365,6 +368,23 @@ class _SimulationScreenState extends State<SimulationScreen> {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Bouton configuration (debug only)
+        if (kDebugMode)
+          Row(
+            children: [
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.settings, size: 20),
+                onPressed: _showSecretDialog,
+                tooltip: 'Configurer le secret Sheets',
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.grey[200],
+                  padding: const EdgeInsets.all(8),
+                ),
+              ),
+            ],
+          ),
+
         const Text('Simulation d\'acquisition', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         const SizedBox(height: 16),
 
@@ -433,7 +453,16 @@ class _SimulationScreenState extends State<SimulationScreen> {
         const SizedBox(height: 12),
         _Champ(label: 'Taux d\'emprunt', controller: _taux, onChanged: (_) => setState(() {}), suffix: '%'),
         const SizedBox(height: 12),
-        _Champ(label: 'Date début emprunt (MM-AAAA)', controller: _dateDebut, onChanged: (_) => setState(() {}), suffix: ''),
+        _Champ(
+          label: 'Date début emprunt (MM-AAAA)',
+          controller: _dateDebut,
+          onChanged: (_) => setState(() {}),
+          suffix: '',
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            DateEmpruntInputFormatter(),
+          ],
+        ),
         const SizedBox(height: 12),
         _Champ(label: 'Assurance crédit (annuelle)', controller: _assuranceCredit, onChanged: (_) => setState(() {}), suffix: '€'),
         const SizedBox(height: 20),
@@ -526,45 +555,131 @@ class _SimulationScreenState extends State<SimulationScreen> {
 
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(16),
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!),
             ),
             child: Column(children: [
-              _BlocResultat(
-                label: 'Intérêts Emprunt annuelle',
-                sousTitre: 'Année $_anneeSelection',
-                valeur: _interetsAnnee(),
-                couleur: const Color(0xFFEF5350),
-              ),
-              const Divider(color: Colors.white24, height: 28),
-              _BlocResultat(
-                label: 'Capital remboursé annuel',
-                sousTitre: 'Année $_anneeSelection',
-                valeur: _capitalAnnee(),
-                couleur: const Color(0xFF4CAF50),
-              ),
-              const Divider(color: Colors.white24, height: 28),
-              _BlocResultat(
-                label: 'Échéance mensuelle',
-                sousTitre: 'Constante sur toute la durée',
-                valeur: _echeance ?? 0,
-                couleur: Colors.white,
-                grand: true,
+              _Ligne('💸 Intérêts annuels', _interetsAnnee(),
+                  couleur: const Color(0xFFEF5350)),
+              _Ligne('📈 Capital remboursé', _capitalAnnee(),
+                  couleur: const Color(0xFF4CAF50)),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1565C0).withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: const Color(0xFF1565C0).withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Row(children: [
+                  Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '🏦 Échéance mensuelle',
+                            style: TextStyle(
+                              color: const Color(0xFF1565C0),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Text(
+                            'Constante sur toute la durée',
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ]),
+                  ),
+                  Text(
+                    _euro.format(_echeance ?? 0),
+                    style: const TextStyle(
+                      color: const Color(0xFF1565C0),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ]),
               ),
             ]),
           ),
           const SizedBox(height: 24),
           const Text('Cash-flow mensuel', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
-          _ResultatsCashFlow(
-            totalLoyers: _totalLoyers,
-            totalCharges: _totalChargesMensuelles,
-            cashflow: _cashflow,
-            typeBien: _typeBien,
-            nbApparts: _nbApparts,
-            loyerAnnuel: _loyerAnnuel,
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Column(children: [
+              _Ligne('💰 Recettes mensuelles', _totalLoyers,
+                  couleur: const Color(0xFF4CAF50)),
+              const SizedBox(height: 8),
+              _Ligne('💸 Charges mensuelles', _totalChargesMensuelles,
+                  couleur: const Color(0xFFEF5350)),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _cashflow >= 0
+                      ? const Color(0xFF4CAF50).withValues(alpha: 0.06)
+                      : const Color(0xFFEF5350).withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _cashflow >= 0
+                        ? const Color(0xFF4CAF50).withValues(alpha: 0.2)
+                        : const Color(0xFFEF5350).withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Row(children: [
+                  Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '📊 Cash-flow mensuel',
+                            style: TextStyle(
+                              color: _cashflow >= 0
+                                  ? const Color(0xFF4CAF50)
+                                  : const Color(0xFFEF5350),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Text(
+                            'Recettes - Charges',
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ]),
+                  ),
+                  Text(
+                    _euro.format(_cashflow),
+                    style: TextStyle(
+                      color: _cashflow >= 0
+                          ? const Color(0xFF4CAF50)
+                          : const Color(0xFFEF5350),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ]),
+              ),
+            ]),
           ),
           const SizedBox(height: 24),
 
@@ -644,6 +759,53 @@ class _SimulationScreenState extends State<SimulationScreen> {
   }
 
   bool get _peutCalculer => _prixVal > 0 && _nbAnneesVal > 0 && _tauxVal > 0;
+
+  // ── Configuration du secret Sheets (mode debug) ─────────────────────────────
+  void _showSecretDialog() {
+    if (!kDebugMode) return;
+    final currentSecret = AppConfig.hasSecretOverride ? AppConfig.sheetsSecret : '';
+    final controller = TextEditingController(text: currentSecret);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('🔧 Configuration Sheets (Debug)'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Entrez votre SHEETS_SECRET pour iOS:'),
+            const SizedBox(height: 8),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'votre_secret_ici',
+              ),
+              obscureText: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              AppConfig.sheetsSecret = controller.text.trim();
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    AppConfig.hasSecretOverride
+                        ? '✅ Secret enregistré (mode override)'
+                        : '⚠️ Secret effacé (utilisez --dart-define)',
+                  ),
+                  backgroundColor: AppConfig.hasSecretOverride ? Colors.green : Colors.orange,
+                ),
+              );
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -655,13 +817,15 @@ class _Champ extends StatelessWidget {
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final String suffix;
-  const _Champ({required this.label, required this.controller, required this.onChanged, this.suffix = '€'});
+  final List<TextInputFormatter>? inputFormatters;
+  const _Champ({required this.label, required this.controller, required this.onChanged, this.suffix = '€', this.inputFormatters});
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: inputFormatters,
       onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
@@ -726,9 +890,9 @@ class _BlocResultat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(children: [
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: TextStyle(color: Colors.white, fontSize: grand ? 14 : 13, fontWeight: FontWeight.w600)),
+        Text(label, style: TextStyle(color: Colors.grey[800], fontSize: grand ? 14 : 13, fontWeight: FontWeight.w600)),
         const SizedBox(height: 2),
-        Text(sousTitre, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        Text(sousTitre, style: const TextStyle(color: Colors.grey, fontSize: 11)),
       ])),
       Text(
         _euro.format(valeur),
@@ -887,104 +1051,75 @@ class _RecettesChargesSection extends StatelessWidget {
       const SizedBox(height: 24),
 
       // ── Résultats ──
-      if (_totalLoyers > 0 || _totalCharges > 0) Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.grey[900],
+      if (_totalLoyers > 0 || _totalCharges > 0) Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFE8E8E8), width: 0.5),
         ),
-        child: Column(children: [
-          _BlocResultat(
-            label: 'Recettes mensuelles',
-            sousTitre: typeBien == 'immeuble' ? '${loyers.length} appartement(s)' : 'Loyer mensuel',
-            valeur: _totalLoyers,
-            couleur: const Color(0xFF4CAF50),
-          ),
-          const Divider(color: Colors.white24, height: 28),
-          _BlocResultat(
-            label: 'Charges mensuelles',
-            sousTitre: 'Charges annuelles ÷ 12',
-            valeur: _totalCharges,
-            couleur: const Color(0xFFEF5350),
-          ),
-          const Divider(color: Colors.white24, height: 28),
-          _BlocResultat(
-            label: 'Cash-flow',
-            sousTitre: 'Recettes - Charges',
-            valeur: _cashflow,
-            couleur: Colors.white,
-            grand: true,
-          ),
-        ]),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(children: [
+            _BlocResultat(
+              label: 'Recettes mensuelles',
+              sousTitre: typeBien == 'immeuble' ? '${loyers.length} appartement(s)' : 'Loyer mensuel',
+              valeur: _totalLoyers,
+              couleur: AppTheme.primary,
+            ),
+            const Divider(color: Color(0xFFE8E8E8), height: 28),
+            _BlocResultat(
+              label: 'Charges mensuelles',
+              sousTitre: 'Charges annuelles ÷ 12',
+              valeur: _totalCharges,
+              couleur: AppTheme.danger,
+            ),
+            const Divider(color: Color(0xFFE8E8E8), height: 28),
+            _BlocResultat(
+              label: 'Cash-flow',
+              sousTitre: 'Recettes - Charges',
+              valeur: _cashflow,
+              couleur: _cashflow >= 0 ? AppTheme.primary : AppTheme.danger,
+              grand: true,
+            ),
+          ]),
+        ),
       ),
       const SizedBox(height: 32),
     ]);
   }
 }
 
-// ── Widget cash-flow après emprunt ─────────────────────────────────────────────
-class _ResultatsCashFlow extends StatelessWidget {
-  final double totalLoyers;
-  final double totalCharges;
-  final double cashflow;
-  final String typeBien;
-  final int nbApparts;
-  final double? loyerAnnuel;
 
-  const _ResultatsCashFlow({
-    required this.totalLoyers,
-    required this.totalCharges,
-    required this.cashflow,
-    required this.typeBien,
-    required this.nbApparts,
-    this.loyerAnnuel,
-  });
-
+// ── Formatter pour date emprunt (MM-AAAA) ─────────────────────────────────────
+class DateEmpruntInputFormatter extends TextInputFormatter {
   @override
-  Widget build(BuildContext context) {
-    final String sousTitre = typeBien == 'immeuble' ? '$nbApparts appartement(s)' : 'Loyer mensuel';
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(children: [
-        if (loyerAnnuel != null)
-          _BlocResultat(
-            label: 'Loyer annuel',
-            sousTitre: sousTitre,
-            valeur: loyerAnnuel!,
-            couleur: const Color(0xFF4CAF50),
-          ),
-        if (loyerAnnuel != null) const SizedBox(height: 12),
-        // Recettes mensuelles
-        _BlocResultat(
-          label: 'Recettes mensuelles',
-          sousTitre: sousTitre,
-          valeur: totalLoyers,
-          couleur: const Color(0xFF4CAF50),
-        ),
-        const Divider(color: Colors.white24, height: 28),
-        // Charges mensuelles
-        _BlocResultat(
-          label: 'Charges mensuelles',
-          sousTitre: 'Charges annuelles ÷ 12',
-          valeur: totalCharges,
-          couleur: const Color(0xFFEF5350),
-        ),
-        const Divider(color: Colors.white24, height: 28),
-        // Cash-flow
-        _BlocResultat(
-          label: 'Cash-flow',
-          sousTitre: 'Recettes - Charges',
-          valeur: cashflow,
-          couleur: Colors.white,
-          grand: true,
-        ),
-      ]),
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.text.isEmpty) return newValue;
+
+    // Garder uniquement les chiffres
+    String digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+
+    // Limiter à 6 chiffres (2 pour mois + 4 pour année)
+    if (digits.length > 6) digits = digits.substring(0, 6);
+
+    // Formater avec tiret après le mois
+    String formatted = digits;
+    if (digits.length > 2) {
+      formatted = '${digits.substring(0, 2)}-${digits.substring(2)}';
+    }
+
+    // Ajuster la position du curseur
+    int cursorPos = formatted.length;
+    // Si ajout d'un caractère et qu'un tiret a été inséré, avancer le curseur
+    if (oldValue.text.length < newValue.text.length && formatted.length > 2 && formatted[2] == '-') {
+      cursorPos = newValue.selection.baseOffset + 1;
+    }
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: cursorPos),
     );
   }
 }
+
+// ── Widget cash-flow après emprunt ─────────────────────────────────────────────

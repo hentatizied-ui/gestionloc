@@ -20,8 +20,11 @@ class _BiensScreenState extends State<BiensScreen> {
 
   void _toggleImmeuble(String id) {
     setState(() {
-      if (_collapsed.contains(id)) _collapsed.remove(id);
-      else _collapsed.add(id);
+      if (_collapsed.contains(id)) {
+        _collapsed.remove(id);
+      } else {
+        _collapsed.add(id);
+      }
     });
   }
 
@@ -516,11 +519,11 @@ class _FormBienState extends State<FormBien> {
     final prefix = _type == 'appartement' ? 'Apt' : _capitalize(_type);
 
     if (code.isNotEmpty && numero.isNotEmpty) {
-      _nom.text = prefix + code + '-' + numero;
+      _nom.text = '$prefix$code-$numero';
     } else if (code.isNotEmpty) {
       _nom.text = prefix + code;
     } else {
-      _nom.text = prefix + '-' + numero;
+      _nom.text = '$prefix-$numero';
     }
   }
 
@@ -547,7 +550,7 @@ class _FormBienState extends State<FormBien> {
               const SizedBox(height: 20),
               // Immeuble optionnel
               DropdownButtonFormField<String?>(
-                value: _immeubleId,
+                initialValue: _immeubleId,
                 decoration: _deco('Immeuble (optionnel)'),
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Aucun (bien indépendant)')),
@@ -572,7 +575,7 @@ class _FormBienState extends State<FormBien> {
               const SizedBox(height: 14),
               // 2. Type de bien
               DropdownButtonFormField<String>(
-                value: _type,
+                initialValue: _type,
                 decoration: _deco('Type de bien'),
                 items: ['appartement', 'studio', 'maison', 'loft', 'local commercial']
                     .map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
@@ -598,7 +601,7 @@ class _FormBienState extends State<FormBien> {
                     child: IgnorePointer(
                       ignoring: _type == 'maison',
                       child: DropdownButtonFormField<String?>(
-                        value: _type == 'maison' ? null : _etageVal,
+                        initialValue: _type == 'maison' ? null : _etageVal,
                         decoration: _deco('Étage'),
                         hint: const Text('Sélectionner'),
                         items: [

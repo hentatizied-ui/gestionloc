@@ -549,9 +549,9 @@ class _BilanSansBienCard extends StatelessWidget {
             child: const Icon(Icons.receipt_outlined, size: 20, color: Colors.grey),
           ),
           const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Charges générales', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
-            const Text('Non rattachées à un bien', style: TextStyle(fontSize: 11, color: Colors.grey)),
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Charges générales', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+            Text('Non rattachées à un bien', style: TextStyle(fontSize: 11, color: Colors.grey)),
           ])),
           Text(_euro.format(net), style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14,
               color: net >= 0 ? AppTheme.primary : AppTheme.danger)),
@@ -692,7 +692,7 @@ class _CfSectionState extends State<_CfSection> {
         if (widget.items.isEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text('Aucun élément pour ' + widget.annee.toString(),
+            child: Text('Aucun élément pour ${widget.annee}',
                 style: TextStyle(fontSize: 12, color: Colors.grey[400])),
           )
         else
@@ -720,20 +720,20 @@ class _ChargeFixeRow extends StatelessWidget {
   String _datesCf(ChargeFixe cf) {
     final fmt = DateFormat('MM/yyyy', 'fr_FR');
     final debut = fmt.format(cf.dateDebut);
-    if (cf.dateFin == null) return 'Depuis ' + debut + ' · sans fin';
-    return debut + ' → ' + fmt.format(cf.dateFin!);
+    if (cf.dateFin == null) return 'Depuis $debut · sans fin';
+    return '$debut → ${fmt.format(cf.dateFin!)}';
   }
 
   @override
   Widget build(BuildContext context) {
     final bien = data.getBienById(cf.bienId);
-    String _nomBienOuImmeuble() {
+    String nomBienOuImmeuble() {
       if (bien != null) return bien.nom;
       if (cf.bienId == null || cf.bienId!.isEmpty) return 'Global';
       try { return data.immeubles.firstWhere((i) => i.id == cf.bienId).nom; } catch (_) {}
       return cf.bienId!;
     }
-    final nomCible = _nomBienOuImmeuble();
+    final nomCible = nomBienOuImmeuble();
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -756,7 +756,7 @@ class _ChargeFixeRow extends StatelessWidget {
             Text(_datesCf(cf), style: TextStyle(fontSize: 10, color: Colors.grey[500])),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('-' + _euro.format(cf.estAnnuelle ? cf.montant * 12 : cf.montant) + (cf.estAnnuelle ? '/an' : '/mois'),
+            Text('-${_euro.format(cf.estAnnuelle ? cf.montant * 12 : cf.montant)}${cf.estAnnuelle ? '/an' : '/mois'}',
                 style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13,
                     color: cf.actif ? AppTheme.danger : Colors.grey)),
             const SizedBox(height: 4),
@@ -882,10 +882,10 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
         const DropdownMenuItem(value: null, child: Text('Sélectionner')),
       ];
       for (final i in widget.data.immeubles) {
-        if (seen.add(i.id)) items.add(DropdownMenuItem(value: i.id, child: Text('🏢 ' + i.nom)));
+        if (seen.add(i.id)) items.add(DropdownMenuItem(value: i.id, child: Text('🏢 ${i.nom}')));
       }
       for (final b in widget.data.biensSansImmeuble) {
-        if (seen.add(b.id)) items.add(DropdownMenuItem(value: b.id, child: Text('🏠 ' + b.nom)));
+        if (seen.add(b.id)) items.add(DropdownMenuItem(value: b.id, child: Text('🏠 ${b.nom}')));
       }
       return items;
     }
@@ -989,7 +989,7 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
 
               // Bien concerné
               DropdownButtonFormField<String?>(
-                value: _biensItems.any((item) => item.value == _bienId) ? _bienId : null,
+                initialValue: _biensItems.any((item) => item.value == _bienId) ? _bienId : null,
                 decoration: _deco('Bien concerné'),
                 items: _biensItems,
                 onChanged: (v) => setState(() => _bienId = v),
@@ -1006,11 +1006,13 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
                         context: context,
                         builder: (_) => _AnneeDialog(initial: DateTime.now().year),
                       );
-                      if (picked != null) setState(() {
+                      if (picked != null) {
+                        setState(() {
                         _anneeSelectionnee = picked;
                         _dateDebut = DateTime(picked, 1, 1);
                         _dateFin = DateTime(picked, 12, 31);
                       });
+                      }
                     },
                     child: Container(
                       width: double.infinity,
@@ -1498,14 +1500,14 @@ class _FormTransactionState extends State<FormTransaction> {
               ),
               const SizedBox(height: 14),
               DropdownButtonFormField<TypeTransaction>(
-                value: _type,
+                initialValue: _type,
                 decoration: _deco('Catégorie'),
                 items: TypeTransaction.values.map((t) => DropdownMenuItem(value: t, child: Text(t.name))).toList(),
                 onChanged: (v) => setState(() => _type = v!),
               ),
               const SizedBox(height: 14),
               DropdownButtonFormField<String?>(
-                value: _bienId,
+                initialValue: _bienId,
                 decoration: _deco('Bien concerné (optionnel)'),
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Aucun')),
@@ -1515,7 +1517,7 @@ class _FormTransactionState extends State<FormTransaction> {
               ),
               const SizedBox(height: 14),
               if (_bienId == null) DropdownButtonFormField<String?>(
-                value: _immeubleId,
+                initialValue: _immeubleId,
                 decoration: _deco("Charge commune d'immeuble (optionnel)"),
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Aucun')),
@@ -1882,7 +1884,7 @@ class _FormTicketState extends State<FormTicket> {
               _TF(_desc, 'Description', maxLines: 3),
               _TF(_rapporte, 'Signalé par'),
               DropdownButtonFormField<String>(
-                value: _bienId,
+                initialValue: _bienId,
                 decoration: _deco('Bien concerné'),
                 items: widget.data.biens.map((b) => DropdownMenuItem(value: b.id, child: Text(b.nom))).toList(),
                 validator: (v) => v == null ? 'Requis' : null,
@@ -1890,7 +1892,7 @@ class _FormTicketState extends State<FormTicket> {
               ),
               const SizedBox(height: 14),
               DropdownButtonFormField<PrioriteTicket>(
-                value: _priorite,
+                initialValue: _priorite,
                 decoration: _deco('Priorité'),
                 items: PrioriteTicket.values.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
                 onChanged: (v) => setState(() => _priorite = v!),

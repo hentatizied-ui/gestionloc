@@ -9,6 +9,7 @@ import 'finances_screen.dart';
 import 'compta_screen.dart';
 import 'simulation_screen.dart';
 import 'splash_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -55,6 +56,9 @@ class _HomeScreenState extends State<HomeScreen> {
               const PopupMenuItem(value: 'refresh', child: Row(children: [
                 Icon(Icons.sync, size: 18), SizedBox(width: 8), Text('Synchroniser'),
               ])),
+              const PopupMenuItem(value: 'settings', child: Row(children: [
+                Icon(Icons.settings, size: 18), SizedBox(width: 8), Text('Paramètres'),
+              ])),
               const PopupMenuItem(value: 'logout', child: Row(children: [
                 Icon(Icons.logout, size: 18), SizedBox(width: 8), Text('Changer d\'utilisateur'),
               ])),
@@ -62,6 +66,11 @@ class _HomeScreenState extends State<HomeScreen> {
             onSelected: (v) async {
               if (v == 'refresh') {
                 context.read<DataService>().loadAll();
+              } else if (v == 'settings') {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
               } else if (v == 'logout') {
                 await context.read<UserService>().clearUser();
                 if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const WelcomeScreen()));

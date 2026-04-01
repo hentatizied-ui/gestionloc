@@ -15,18 +15,34 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 class AppConfig {
+  // Override du secret (pour mode debug seulement)
+  static String? _overrideSecret;
+
   /// Secret pour l'API Google Apps Script
-  /// DOIT être passé via --dart-define=SHEETS_SECRET
+  /// Priorité : 1) override (mode debug), 2) --dart-define, 3) vide
   static String get sheetsSecret {
-    const secret = String.fromEnvironment('SHEETS_SECRET', defaultValue: '');
-    if (secret.isEmpty) {
-      throw StateError(
-        'SHEETS_SECRET non défini. '
-        'Compilez avec: flutter run --dart-define=SHEETS_SECRET=votre_secret',
-      );
+    // En debug, on peut utiliser un override
+    if (_overrideSecret != null && _overrideSecret!.isNotEmpty) {
+      return _overrideSecret!;
     }
+
+    // Sinon, lire depuis dart-define
+    const secret = String.fromEnvironment('SHEETS_SECRET', defaultValue: '');
     return secret;
   }
+
+  /// Vérifie si le secret est configuré
+  static bool get hasSheetsSecret {
+    return sheetsSecret.isNotEmpty;
+  }
+
+  /// Définir le secret manuellement (mode debug seulement)
+  static set sheetsSecret(String? value) {
+    _overrideSecret = value;
+  }
+
+  /// Retourne true si un override de secret est défini (mode debug)
+  static bool get hasSecretOverride => _overrideSecret?.isNotEmpty == true;
 
   /// URL du proxy Google Apps Script
   static const String sheetsProxyUrl =

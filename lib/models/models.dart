@@ -93,7 +93,7 @@ class Bien {
   ];
 
   Bien copyWith({String? nom, String? immeubleId, String? adresse, String? ville, String? codePostal, String? type, int? pieces, double? surface, double? loyerMensuel, double? charges, double? prixAchat, double? taxeFonciere, bool? estLoue, String? locataireId, String? etage, String? numero}) =>
-      Bien(id: id, immeubleId: immeubleId ?? this.immeubleId, nom: nom ?? this.nom, type: type ?? this.type, adresse: adresse ?? this.adresse, ville: ville ?? this.ville, codePostal: codePostal ?? this.codePostal, etage: etage ?? this.etage, numero: numero ?? this.numero, surface: surface ?? this.surface, pieces: pieces ?? this.pieces, loyerMensuel: loyerMensuel ?? this.loyerMensuel, charges: charges ?? this.charges, prixAchat: prixAchat ?? this.prixAchat, taxeFonciere: taxeFonciere ?? this.taxeFonciere, estLoue: estLoue ?? this.estLoue, locataireId: locataireId ?? this.locataireId, dateAjout: dateAjout, note: this.note);
+      Bien(id: id, immeubleId: immeubleId ?? this.immeubleId, nom: nom ?? this.nom, type: type ?? this.type, adresse: adresse ?? this.adresse, ville: ville ?? this.ville, codePostal: codePostal ?? this.codePostal, etage: etage ?? this.etage, numero: numero ?? this.numero, surface: surface ?? this.surface, pieces: pieces ?? this.pieces, loyerMensuel: loyerMensuel ?? this.loyerMensuel, charges: charges ?? this.charges, prixAchat: prixAchat ?? this.prixAchat, taxeFonciere: taxeFonciere ?? this.taxeFonciere, estLoue: estLoue ?? this.estLoue, locataireId: locataireId ?? this.locataireId, dateAjout: dateAjout, note: note);
 }
 
 // ─── LOCATAIRE ─────────────────────────────────────────────────────────────
@@ -131,11 +131,11 @@ class Locataire {
   String get nomComplet {
     switch (typeLocataire) {
       case TypeLocataire.entreprise:
-        return raisonSociale?.isNotEmpty == true ? raisonSociale! : prenom + ' ' + nom;
+        return raisonSociale?.isNotEmpty == true ? raisonSociale! : '$prenom $nom';
       case TypeLocataire.sousTutelle:
-        return prenom + ' ' + nom;
+        return '$prenom $nom';
       case TypeLocataire.particulier:
-        return prenom + ' ' + nom;
+        return '$prenom $nom';
     }
   }
 
@@ -143,13 +143,13 @@ class Locataire {
   String get nomQuittance {
     switch (typeLocataire) {
       case TypeLocataire.entreprise:
-        return raisonSociale?.isNotEmpty == true ? raisonSociale! : prenom + ' ' + nom;
+        return raisonSociale?.isNotEmpty == true ? raisonSociale! : '$prenom $nom';
       case TypeLocataire.sousTutelle:
         final org = raisonSociale?.isNotEmpty == true ? raisonSociale! : '';
-        final benef = prenom + ' ' + nom;
-        return org + ', (tuteur legal de ' + benef + ') representant legalement ce dernier dans le cadre de sa tutelle';
+        final benef = '$prenom $nom';
+        return '$org, (tuteur legal de $benef) representant legalement ce dernier dans le cadre de sa tutelle';
       case TypeLocataire.particulier:
-        return prenom + ' ' + nom;
+        return '$prenom $nom';
     }
   }
 
@@ -193,7 +193,7 @@ class Locataire {
     depot: depot ?? this.depot, statut: statut ?? this.statut,
     typeLocataire: typeLocataire ?? this.typeLocataire,
     raisonSociale: raisonSociale ?? this.raisonSociale,
-    note: this.note,
+    note: note,
   );
 }
 

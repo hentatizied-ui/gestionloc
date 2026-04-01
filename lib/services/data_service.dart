@@ -107,7 +107,9 @@ class DataService extends ChangeNotifier {
       // Ne pas compter le mois courant
       final moisCourantPaye = loyers.any((t) =>
           t.date.year == moisCourant.year && t.date.month == moisCourant.month);
-      if (moisCourantPaye) {} else moisImpayes = (moisImpayes - 1).clamp(0, 999);
+      if (moisCourantPaye) {} else {
+        moisImpayes = (moisImpayes - 1).clamp(0, 999);
+      }
     }
 
     if (moisImpayes > 1) return StatutPaiement.retardCritique;
@@ -151,7 +153,12 @@ class DataService extends ChangeNotifier {
 
   void updateSheets(SheetsService sheets) {
     _sheets = sheets;
-    if (sheets.isReady) loadAll();
+    if (sheets.isReady) {
+      // Charger les données seulement si pas déjà en cours de chargement
+      if (!_loading) {
+        loadAll();
+      }
+    }
   }
 
   Future<void> loadAll() async {

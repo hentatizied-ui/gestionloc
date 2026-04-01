@@ -265,8 +265,8 @@ class _LocataireDetail extends StatelessWidget {
             ]),
           ),
           const SizedBox(height: 20),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            const Text('Historique des paiements',
+          const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('Historique des paiements',
                 style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
           ]),
           const SizedBox(height: 10),
@@ -345,14 +345,12 @@ class _HistoriquePaiementsState extends State<_HistoriquePaiements> {
     }
 
     // Mois de fin : prorata jusqu'au jour de fin
-    if (fin != null) {
-      final estMoisFin = mois.year == fin.year && mois.month == fin.month;
-      if (estMoisFin && fin.day < nbJoursMois) {
-        final montant = (loyerBase / nbJoursMois) * fin.day;
-        return double.parse(montant.toStringAsFixed(2));
-      }
+    final estMoisFin = mois.year == fin.year && mois.month == fin.month;
+    if (estMoisFin && fin.day < nbJoursMois) {
+      final montant = (loyerBase / nbJoursMois) * fin.day;
+      return double.parse(montant.toStringAsFixed(2));
     }
-
+  
     return loyerBase;
   }
 
@@ -365,12 +363,8 @@ class _HistoriquePaiementsState extends State<_HistoriquePaiements> {
     final estProrata = (mois.year == debut.year &&
             mois.month == debut.month &&
             debut.day > 1) ||
-        (fin != null && mois.year == fin.year && mois.month == fin.month);
-    final label = 'Loyer ' +
-        _capitalize(_dateMoisF.format(mois)) +
-        ' - ' +
-        widget.loc.nomComplet +
-        (estProrata ? ' (prorata)' : '');
+        (mois.year == fin.year && mois.month == fin.month);
+    final label = 'Loyer ${_capitalize(_dateMoisF.format(mois))} - ${widget.loc.nomComplet}${estProrata ? ' (prorata)' : ''}';
     final tx = widget.data.nouvTransaction(
       label: label,
       montant: montant,
@@ -427,9 +421,8 @@ class _HistoriquePaiementsState extends State<_HistoriquePaiements> {
                               fontWeight: FontWeight.w500,
                               color: Colors.grey)),
                       Text(
-                          'Disponible le 1er ' +
-                              _capitalize(
-                                  DateFormat('MMMM', 'fr_FR').format(m)),
+                          'Disponible le 1er ${_capitalize(
+                                  DateFormat('MMMM', 'fr_FR').format(m))}',
                           style:
                               TextStyle(fontSize: 11, color: Colors.grey[500])),
                     ])),
@@ -601,19 +594,20 @@ class _QuittanceSheet extends StatelessWidget {
       final bytes = await _getPdfBytes(context);
       if (bytes == null || !context.mounted) return;
       final moisStr = DateFormat('MMMM_yyyy', 'fr_FR').format(mois);
-      final filename = 'Quittance_' + loc.nom + '_' + moisStr + '.pdf';
+      final filename = 'Quittance_${loc.nom}_$moisStr.pdf';
       Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => _PdfViewerPage(bytes: bytes, title: filename),
           ));
     } catch (e) {
-      if (context.mounted)
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Erreur PDF: ' + e.toString()),
+              content: Text('Erreur PDF: $e'),
               backgroundColor: Colors.red),
         );
+      }
     }
   }
 
@@ -624,14 +618,15 @@ class _QuittanceSheet extends StatelessWidget {
       final moisStr = DateFormat('MMMM_yyyy', 'fr_FR').format(mois);
       await Printing.sharePdf(
           bytes: bytes,
-          filename: 'Quittance_' + loc.nom + '_' + moisStr + '.pdf');
+          filename: 'Quittance_${loc.nom}_$moisStr.pdf');
     } catch (e) {
-      if (context.mounted)
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Erreur PDF: ' + e.toString()),
+              content: Text('Erreur PDF: $e'),
               backgroundColor: Colors.red),
         );
+      }
     }
   }
 
@@ -927,7 +922,7 @@ class _FormLocataireState extends State<FormLocataire> {
 
               // 1. Type de locataire EN PREMIER
               DropdownButtonFormField<TypeLocataire>(
-                value: _typeLocataire,
+                initialValue: _typeLocataire,
                 decoration: _deco('Type de locataire'),
                 items: const [
                   DropdownMenuItem(
@@ -982,7 +977,7 @@ class _FormLocataireState extends State<FormLocataire> {
                   keyboard: TextInputType.number),
 
               DropdownButtonFormField<String?>(
-                value: _bienId,
+                initialValue: _bienId,
                 decoration: _deco('Bien loué'),
                 hint: const Text('Sélectionner un bien'),
                 items: [
@@ -996,31 +991,31 @@ class _FormLocataireState extends State<FormLocataire> {
               const SizedBox(height: 14),
               if (_isEdit) ...[
                 DropdownButtonFormField<StatutPaiement>(
-                  value: _statut,
+                  initialValue: _statut,
                   decoration: _deco('Statut paiement'),
-                  items: [
+                  items: const [
                     DropdownMenuItem(
                         value: StatutPaiement.aJour,
                         child: Row(children: [
                           Icon(Icons.check_circle,
                               color: AppTheme.primary, size: 16),
-                          const SizedBox(width: 8),
-                          const Text('À jour')
+                          SizedBox(width: 8),
+                          Text('À jour')
                         ])),
                     DropdownMenuItem(
                         value: StatutPaiement.enRetard,
                         child: Row(children: [
                           Icon(Icons.warning,
                               color: AppTheme.warning, size: 16),
-                          const SizedBox(width: 8),
-                          const Text('En retard')
+                          SizedBox(width: 8),
+                          Text('En retard')
                         ])),
                     DropdownMenuItem(
                         value: StatutPaiement.retardCritique,
                         child: Row(children: [
                           Icon(Icons.error, color: AppTheme.danger, size: 16),
-                          const SizedBox(width: 8),
-                          const Text('Retard critique')
+                          SizedBox(width: 8),
+                          Text('Retard critique')
                         ])),
                   ],
                   onChanged: (v) => setState(() => _statut = v!),

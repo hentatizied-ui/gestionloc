@@ -101,8 +101,11 @@ Map<String, double> _calcCompta(DataService data, int annee) {
   double loyers = 0, chargesRec = 0, reparations = 0, assurances = 0, taxes = 0, autres = 0;
   for (final t in txs) {
     if (t.montant > 0) {
-      if (t.type == TypeTransaction.loyer) loyers += t.montant;
-      else chargesRec += t.montant;
+      if (t.type == TypeTransaction.loyer) {
+        loyers += t.montant;
+      } else {
+        chargesRec += t.montant;
+      }
     } else {
       final m = t.montant.abs();
       switch (t.type) {
@@ -167,7 +170,7 @@ class _RecapTab extends StatelessWidget {
           ]),
         ),
         const SizedBox(height: 20),
-        _SectionTitle('Indicateurs clés'),
+        const _SectionTitle('Indicateurs clés'),
         const SizedBox(height: 8),
         GridView.count(
           crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
@@ -301,13 +304,13 @@ class _BienIndependantCardState extends State<_BienIndependantCard> {
               Expanded(child: Row(children: [
                 Icon(Icons.arrow_upward, size: 12, color: AppTheme.primary.withOpacity(0.7)),
                 const SizedBox(width: 4),
-                Text('Loyers ' + _euro.format(loyer),
+                Text('Loyers ${_euro.format(loyer)}',
                     style: TextStyle(fontSize: 11, color: Colors.grey[700])),
               ])),
               Row(children: [
                 Icon(Icons.arrow_downward, size: 12, color: AppTheme.danger.withOpacity(0.7)),
                 const SizedBox(width: 4),
-                Text('Charges ' + _euro.format(charges),
+                Text('Charges ${_euro.format(charges)}',
                     style: TextStyle(fontSize: 11, color: Colors.grey[700])),
               ]),
             ]),
@@ -393,13 +396,13 @@ class _ImmeubleSectionState extends State<_ImmeubleSection> {
               Expanded(child: Row(children: [
                 Icon(Icons.arrow_upward, size: 12, color: AppTheme.primary.withOpacity(0.7)),
                 const SizedBox(width: 4),
-                Text('Loyers ' + _euro.format(loyerTotal),
+                Text('Loyers ${_euro.format(loyerTotal)}',
                     style: TextStyle(fontSize: 11, color: AppTheme.primaryDark.withOpacity(0.8))),
               ])),
               Row(children: [
                 Icon(Icons.arrow_downward, size: 12, color: AppTheme.danger.withOpacity(0.7)),
                 const SizedBox(width: 4),
-                Text('Charges ' + _euro.format(chargesTotal),
+                Text('Charges ${_euro.format(chargesTotal)}',
                     style: TextStyle(fontSize: 11, color: AppTheme.danger.withOpacity(0.8))),
               ]),
             ]),
@@ -525,11 +528,11 @@ class _BienComptaCardState extends State<_BienComptaCard> {
             ]),
             if (_expanded) ...[
               const SizedBox(height: 8),
-              _LigneSection('REVENUS'),
+              const _LigneSection('REVENUS'),
               _LigneD('Loyer encaissé', loyerEncaisse, true),
               if (chargesRec > 0) _LigneD('Charges récupérées', chargesRec, true),
               const SizedBox(height: 6),
-              _LigneSection('CHARGES'),
+              const _LigneSection('CHARGES'),
               _LigneD('Crédit(s)', credits, false),
               _LigneD('Assurance(s)', assurancesCf, false),
               _LigneD('Entretien / réparations', reparations, false),
@@ -541,8 +544,8 @@ class _BienComptaCardState extends State<_BienComptaCard> {
                   decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(8)),
                   child: Row(children: [
                     Expanded(child: _MiniStat2('Prix achat', _euro.format(widget.bien.prixAchat), Colors.grey[600]!)),
-                    Expanded(child: _MiniStat2('Rdt brut', _pct.format(rendBrut) + '%', AppTheme.blue)),
-                    Expanded(child: _MiniStat2('Rdt net', _pct.format(rendNet) + '%',
+                    Expanded(child: _MiniStat2('Rdt brut', '${_pct.format(rendBrut)}%', AppTheme.blue)),
+                    Expanded(child: _MiniStat2('Rdt net', '${_pct.format(rendNet)}%',
                         rendNet > 0 ? AppTheme.primary : AppTheme.danger)),
                   ]),
                 ),
@@ -565,7 +568,7 @@ class _LigneCommuneRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(children: [
         Expanded(child: Text(label, style: const TextStyle(fontSize: 11))),
-        Text(value == 0 ? '0 €' : '-' + _euro.format(value),
+        Text(value == 0 ? '0 €' : '-${_euro.format(value)}',
             style: TextStyle(fontSize: 11,
                 color: value == 0 ? Colors.grey[400] : AppTheme.danger)),
       ]),
@@ -638,8 +641,11 @@ class _GraphTab extends StatelessWidget {
     final revenus = List<double>.filled(12, 0);
     final charges = List<double>.filled(12, 0);
     for (final t in data.transactions.where((t) => t.date.year == annee)) {
-      if (t.isRecette) revenus[t.date.month - 1] += t.montant;
-      else charges[t.date.month - 1] += t.montant.abs();
+      if (t.isRecette) {
+        revenus[t.date.month - 1] += t.montant;
+      } else {
+        charges[t.date.month - 1] += t.montant.abs();
+      }
     }
     final maxVal = [...revenus, ...charges].fold<double>(0, (a, b) => a > b ? a : b);
     final compta = _calcCompta(data, annee);
@@ -652,9 +658,9 @@ class _GraphTab extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Revenus vs Charges mensuels', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
             const SizedBox(height: 12),
-            Row(children: [
+            const Row(children: [
               _Dot(AppTheme.primary, 'Revenus'),
-              const SizedBox(width: 16),
+              SizedBox(width: 16),
               _Dot(AppTheme.danger, 'Charges'),
             ]),
             const SizedBox(height: 12),
@@ -702,7 +708,7 @@ class _GraphTab extends StatelessWidget {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                     Text(e.key, style: const TextStyle(fontSize: 12)),
-                    Text(_euro.format(e.value) + ' (' + _pct.format(pct * 100) + '%)',
+                    Text('${_euro.format(e.value)} (${_pct.format(pct * 100)}%)',
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                   ]),
                   const SizedBox(height: 4),

@@ -98,32 +98,36 @@ class SheetsService extends ChangeNotifier {
   Future<double?> readCell(String sheetName, String cell) async {
     try {
       final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=readCell&sheet=${Uri.encodeComponent(sheetName)}&cell=${Uri.encodeComponent(cell)}');
+      debugPrint('📡 readCell: $url');
       final response = await http.get(url).timeout(AppConfig.httpTimeout);
 
       if (response.statusCode != 200) {
-        debugPrint('readCell HTTP ${response.statusCode} ($sheetName!$cell): ${response.body}');
+        debugPrint('❌ readCell HTTP ${response.statusCode} ($sheetName!$cell): ${response.body}');
         return null;
       }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (data['success'] != true) {
-        debugPrint('readCell API error ($sheetName!$cell): ${data['error']}');
+        debugPrint('❌ readCell API error ($sheetName!$cell): ${data['error']}');
         return null;
       }
 
       final rawValue = data['value'];
       if (rawValue == null || rawValue.toString().isEmpty) {
+        debugPrint('⚠️ readCell: valeur nulle ($sheetName!$cell)');
         return null;
       }
 
       final parsed = double.tryParse(rawValue.toString());
       if (parsed == null) {
-        debugPrint('readCell: valeur non numérique ($sheetName!$cell): $rawValue');
+        debugPrint('⚠️ readCell: valeur non numérique ($sheetName!$cell): $rawValue');
+      } else {
+        debugPrint('✅ readCell: $sheetName!$cell = $parsed');
       }
       return parsed;
     } catch (e) {
-      debugPrint('readCell exception ($sheetName!$cell): $e');
+      debugPrint('❌ readCell exception ($sheetName!$cell): $e');
       return null;
     }
   }
@@ -133,27 +137,32 @@ class SheetsService extends ChangeNotifier {
   Future<List<List<dynamic>>> readRange(String sheetName, String rangeA1) async {
     try {
       final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=readRange&sheet=${Uri.encodeComponent(sheetName)}&range=${Uri.encodeComponent(rangeA1)}');
+      debugPrint('📡 readRange: $url');
       final response = await http.get(url).timeout(AppConfig.httpTimeout);
 
       if (response.statusCode != 200) {
-        debugPrint('readRange HTTP ${response.statusCode} ($sheetName!$rangeA1): ${response.body}');
+        debugPrint('❌ readRange HTTP ${response.statusCode} ($sheetName!$rangeA1): ${response.body}');
         return [];
       }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (data['success'] != true) {
-        debugPrint('readRange API error ($sheetName!$rangeA1): ${data['error']}');
+        debugPrint('❌ readRange API error ($sheetName!$rangeA1): ${data['error']}');
         return [];
       }
 
       final values = data['values'] as List<dynamic>?;
-      if (values == null) return [];
+      if (values == null) {
+        debugPrint('⚠️ readRange: aucune donnée ($sheetName!$rangeA1)');
+        return [];
+      }
 
+      debugPrint('✅ readRange: ${values.length} lignes lues ($sheetName!$rangeA1)');
       // Convertir en List<List<dynamic>>
       return values.map((row) => (row as List<dynamic>).toList()).toList();
     } catch (e) {
-      debugPrint('readRange exception ($sheetName!$rangeA1): $e');
+      debugPrint('❌ readRange exception ($sheetName!$rangeA1): $e');
       return [];
     }
   }

@@ -5,6 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../services/data_service.dart';
 import '../models/models.dart';
 import '../main.dart';
+import 'settings_screen.dart';
 
 final _euro = NumberFormat.currency(locale: 'fr_FR', symbol: '€', decimalDigits: 0);
 final _dateF = DateFormat('dd/MM/yyyy', 'fr_FR');
@@ -17,6 +18,44 @@ class DashboardScreen extends StatelessWidget {
     final data = context.watch<DataService>();
 
     if (data.loading) return const Center(child: CircularProgressIndicator());
+
+    if (data.error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              const Text(
+                'Erreur de chargement',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                data.error!,
+                style: const TextStyle(fontSize: 14, color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () {
+                  // Ouvrir les paramètres de configuration
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  );
+                },
+                icon: const Icon(Icons.settings),
+                label: const Text('Configurer'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return RefreshIndicator(
       onRefresh: data.loadAll,
