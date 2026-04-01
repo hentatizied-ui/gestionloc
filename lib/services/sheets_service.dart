@@ -14,7 +14,7 @@ class SheetsService extends ChangeNotifier {
 
   Future<List<List<String>>> readSheet(String sheetName) async {
     try {
-      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=read&sheet=${Uri.encodeComponent(sheetName)}');
+      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?action=read&sheet=${Uri.encodeComponent(sheetName)}');
       final response = await http.get(url).timeout(
         AppConfig.httpTimeout,
         onTimeout: () => throw TimeoutException('Timeout lecture feuille "$sheetName" après ${AppConfig.httpTimeout.inSeconds}s'),
@@ -61,7 +61,7 @@ class SheetsService extends ChangeNotifier {
 
   Future<bool> appendRow(String sheetName, List<String> values) async {
     try {
-      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=append&sheet=${Uri.encodeComponent(sheetName)}&row=${Uri.encodeComponent(jsonEncode(values))}');
+      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?action=append&sheet=${Uri.encodeComponent(sheetName)}&row=${Uri.encodeComponent(jsonEncode(values))}');
       final response = await http.get(url).timeout(AppConfig.httpTimeout);
       if (response.statusCode != 200) {
         debugPrint('appendRow HTTP error ${response.statusCode}: ${response.body}');
@@ -79,7 +79,7 @@ class SheetsService extends ChangeNotifier {
 
   Future<bool> updateRow(String sheetName, String id, List<String> values) async {
     try {
-      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=update&sheet=${Uri.encodeComponent(sheetName)}&id=${Uri.encodeComponent(id)}&row=${Uri.encodeComponent(jsonEncode(values))}');
+      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?action=update&sheet=${Uri.encodeComponent(sheetName)}&id=${Uri.encodeComponent(id)}&row=${Uri.encodeComponent(jsonEncode(values))}');
       final response = await http.get(url).timeout(AppConfig.httpTimeout);
       if (response.statusCode != 200) {
         debugPrint('updateRow HTTP error ${response.statusCode}: ${response.body}');
@@ -97,7 +97,7 @@ class SheetsService extends ChangeNotifier {
 
   Future<double?> readCell(String sheetName, String cell) async {
     try {
-      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=readCell&sheet=${Uri.encodeComponent(sheetName)}&cell=${Uri.encodeComponent(cell)}');
+      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?action=readCell&sheet=${Uri.encodeComponent(sheetName)}&cell=${Uri.encodeComponent(cell)}');
       debugPrint('📡 readCell: $url');
       final response = await http.get(url).timeout(AppConfig.httpTimeout);
 
@@ -136,7 +136,7 @@ class SheetsService extends ChangeNotifier {
 
   Future<List<List<dynamic>>> readRange(String sheetName, String rangeA1) async {
     try {
-      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=readRange&sheet=${Uri.encodeComponent(sheetName)}&range=${Uri.encodeComponent(rangeA1)}');
+      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?action=readRange&sheet=${Uri.encodeComponent(sheetName)}&range=${Uri.encodeComponent(rangeA1)}');
       debugPrint('📡 readRange: $url');
       final response = await http.get(url).timeout(AppConfig.httpTimeout);
 
@@ -169,7 +169,7 @@ class SheetsService extends ChangeNotifier {
 
   Future<bool> writeCell(String sheetName, String cell, dynamic value) async {
     try {
-      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=writeCell&sheet=${Uri.encodeComponent(sheetName)}&cell=${Uri.encodeComponent(cell)}&value=${Uri.encodeComponent(value.toString())}');
+      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?action=writeCell&sheet=${Uri.encodeComponent(sheetName)}&cell=${Uri.encodeComponent(cell)}&value=${Uri.encodeComponent(value.toString())}');
       final response = await http.get(url).timeout(AppConfig.httpTimeout);
 
       if (response.statusCode != 200) {
@@ -195,7 +195,7 @@ class SheetsService extends ChangeNotifier {
 
   Future<bool> deleteRow(String sheetName, String id) async {
     try {
-      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=delete&sheet=${Uri.encodeComponent(sheetName)}&id=${Uri.encodeComponent(id)}');
+      final url = Uri.parse('${AppConfig.sheetsProxyUrl}?action=delete&sheet=${Uri.encodeComponent(sheetName)}&id=${Uri.encodeComponent(id)}');
       final response = await http.get(url).timeout(AppConfig.httpTimeout);
 
       if (response.statusCode != 200) {

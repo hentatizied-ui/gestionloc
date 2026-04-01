@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:math';
-import 'package:flutter/foundation.dart'; // Pour kDebugMode
 import 'package:flutter/services.dart'; // Pour TextInputFormatter
 import '../services/sheets_service.dart';
 import '../config/app_config.dart'; // Pour config Sheets
@@ -368,23 +367,6 @@ class _SimulationScreenState extends State<SimulationScreen> {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Bouton configuration (debug only)
-        if (kDebugMode)
-          Row(
-            children: [
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.settings, size: 20),
-                onPressed: _showSecretDialog,
-                tooltip: 'Configurer le secret Sheets',
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.grey[200],
-                  padding: const EdgeInsets.all(8),
-                ),
-              ),
-            ],
-          ),
-
         const Text('Simulation d\'acquisition', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         const SizedBox(height: 16),
 
@@ -759,53 +741,6 @@ class _SimulationScreenState extends State<SimulationScreen> {
   }
 
   bool get _peutCalculer => _prixVal > 0 && _nbAnneesVal > 0 && _tauxVal > 0;
-
-  // ── Configuration du secret Sheets (mode debug) ─────────────────────────────
-  void _showSecretDialog() {
-    if (!kDebugMode) return;
-    final currentSecret = AppConfig.hasSecretOverride ? AppConfig.sheetsSecret : '';
-    final controller = TextEditingController(text: currentSecret);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('🔧 Configuration Sheets (Debug)'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Entrez votre SHEETS_SECRET pour iOS:'),
-            const SizedBox(height: 8),
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'votre_secret_ici',
-              ),
-              obscureText: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              AppConfig.sheetsSecret = controller.text.trim();
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    AppConfig.hasSecretOverride
-                        ? '✅ Secret enregistré (mode override)'
-                        : '⚠️ Secret effacé (utilisez --dart-define)',
-                  ),
-                  backgroundColor: AppConfig.hasSecretOverride ? Colors.green : Colors.orange,
-                ),
-              );
-            },
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

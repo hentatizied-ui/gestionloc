@@ -5,7 +5,6 @@ import 'package:fl_chart/fl_chart.dart';
 import '../services/data_service.dart';
 import '../models/models.dart';
 import '../main.dart';
-import 'settings_screen.dart';
 
 final _euro = NumberFormat.currency(locale: 'fr_FR', symbol: '€', decimalDigits: 0);
 final _dateF = DateFormat('dd/MM/yyyy', 'fr_FR');
@@ -41,15 +40,9 @@ class DashboardScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               ElevatedButton.icon(
-                onPressed: () {
-                  // Ouvrir les paramètres de configuration
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                  );
-                },
-                icon: const Icon(Icons.settings),
-                label: const Text('Configurer'),
+                onPressed: () => context.read<DataService>().loadAll(),
+                icon: const Icon(Icons.cloud_sync),
+                label: const Text('Recharger'),
               ),
             ],
           ),

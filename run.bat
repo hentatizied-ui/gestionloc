@@ -1,2 +1,2 @@
   @echo off
-  flutter run --dart-define=SHEETS_SECRET=gestionloc2024
+  flutter run

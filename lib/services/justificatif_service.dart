@@ -70,7 +70,6 @@ class JustificatifService {
       final uri = Uri.parse(AppConfig.sheetsProxyUrl);
       final sheetName = entiteId.startsWith('cf_') ? 'ChargesFixe' : 'Transactions';
       final body = <String, String>{
-        'secret': AppConfig.sheetsSecret,
         'action': 'upload',
         'sheet': sheetName,
         'fileData': base64Data,
@@ -128,7 +127,7 @@ class JustificatifService {
     final fileId = _extraireFileId(url);
     if (fileId == null) return;
     try {
-      final uri = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=deleteFile&fileId=${Uri.encodeComponent(fileId)}');
+      final uri = Uri.parse('${AppConfig.sheetsProxyUrl}?action=deleteFile&fileId=${Uri.encodeComponent(fileId)}');
       await http.get(uri).timeout(AppConfig.httpTimeout);
     } catch (e) {
       debugPrint('Erreur suppression Drive: $e');
@@ -140,7 +139,7 @@ class JustificatifService {
     final fileId = _extraireFileId(url);
     if (fileId == null) return false;
     try {
-      final uri = Uri.parse('${AppConfig.sheetsProxyUrl}?secret=${AppConfig.sheetsSecret}&action=checkFile&fileId=${Uri.encodeComponent(fileId)}');
+      final uri = Uri.parse('${AppConfig.sheetsProxyUrl}?action=checkFile&fileId=${Uri.encodeComponent(fileId)}');
       final resp = await http.get(uri).timeout(AppConfig.httpTimeout);
       if (resp.statusCode != 200) {
         debugPrint('fichierExiste HTTP ${resp.statusCode}: ${resp.body}');
