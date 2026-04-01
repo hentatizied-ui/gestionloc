@@ -382,8 +382,7 @@ class _SimulationScreenState extends State<SimulationScreen> {
                     thumbColor: Colors.white,
                     overlayColor: AppTheme.primary.withValues(alpha: 0.2),
                     tickMarkShape: const RoundSliderTickMarkShape(tickMarkRadius: 2),
-                    tickMarkActiveColor: AppTheme.primary,
-                    tickMarkInactiveColor: Colors.grey[600],
+                    tickMarkColor: Colors.grey[600],
                     showValueIndicator: ShowValueIndicator.never,
                   ),
                   child: Slider(
