@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'dart:math';
 import '../services/sheets_service.dart';
 import '../main.dart'; // Pour AppTheme
 
@@ -19,6 +20,9 @@ class _SimulationScreenState extends State<SimulationScreen> {
   final _fraisBancaires = TextEditingController();
   final _apport         = TextEditingController();
 
+  // Date de début d'emprunt parsée
+  DateTime? _dateDebutEmprunt;
+
   // ── Recettes & Charges ─────────────────────────────────────────────────────
   String _typeBien = 'independant';
   int _nbApparts = 1;
@@ -31,6 +35,7 @@ class _SimulationScreenState extends State<SimulationScreen> {
   final _nbAnnees = TextEditingController();
   final _taux     = TextEditingController();
   final _dateDebut = TextEditingController();
+  final _assuranceCredit = TextEditingController();
 
   // ── Résultats Sheets ───────────────────────────────────────────────────────
   double? _echeance;          // échéance mensuelle (D10)
@@ -55,7 +60,72 @@ class _SimulationScreenState extends State<SimulationScreen> {
 
   int    get _nbAnneesVal     => _parse(_nbAnnees).toInt();
   double get _tauxVal         => _parse(_taux);
+  double get _assuranceCreditVal => _parse(_assuranceCredit);
   int    get _amortissement   => (_nbAnneesVal * 12);
+
+  // Année relative depuis le début de l'emprunt (0 = première année civile)
+  int get _anneeRelative => _dateDebutEmprunt != null ? _anneeSelection - _dateDebutEmprunt!.year : 0;
+
+  // Nombre de mois de l'emprunt dans l'année sélectionnée (pour proratisation)
+  int get _nombreMoisActifsAnnee {
+    if (_dateDebutEmprunt == null) return 0;
+    final annee = _anneeSelection;
+    final debut = _dateDebutEmprunt!;
+    final int moisDebut = debut.month;
+    final int anneeDebut = debut.year;
+    // nombre total de mois de l'emprunt
+    final int totalMois = _amortissement;
+    // mois de fin (inclus) = moisDebut + totalMois - 1
+    int moisFin = moisDebut + totalMois - 1;
+    int anneeFin = anneeDebut + (moisFin ~/ 12);
+    moisFin = moisFin % 12;
+    if (moisFin == 0) {
+      moisFin = 12;
+      anneeFin--;
+    }
+    // Si l'année est avant le début ou après la fin, 0 mois
+    if (annee < anneeDebut || annee > anneeFin) return 0;
+    // Déterminer le premier mois dans cette année
+    int debutMoisDansAnnee = (annee == anneeDebut) ? moisDebut : 1;
+    // Déterminer le dernier mois dans cette année
+    int finMoisDansAnnee = (annee == anneeFin) ? moisFin : 12;
+    return finMoisDansAnnee - debutMoisDansAnnee + 1;
+  }
+
+  // Loyer annuel (proratisé selon nombre de mois d'emprunt dans l'année)
+  double get _loyerAnnuel => _totalLoyers * _nombreMoisActifsAnnee;
+
+  // Intérêts annuels (déjà calculés depuis Sheets, déjà proratisés)
+  double get _interetsAnnuel => _interetsAnnee();
+
+  // Résultat d'exploitation = Loyer annuel - Intérêts emprunt annuel
+  double get _resultatExploitation => _loyerAnnuel - _interetsAnnuel;
+
+  // Frais de première année uniquement (année civile de début, non proratisés)
+  double get _fraisBancairesAnnuel => _anneeRelative == 0 ? _fraisBancVal : 0;
+  double get _fraisNotaireAnnuel => _anneeRelative == 0 ? _fraisNotaire : 0;
+  double get _travauxAnnuel => _anneeRelative == 0 ? _travauxVal : 0;
+
+  // Assurance crédit annuelle (proratisée, sans inflation)
+  double get _assuranceCreditAnnuel => _assuranceCreditVal * (_nombreMoisActifsAnnee / 12);
+
+  // Assurance PNO avec inflation 2% par an et proratisation
+  double get _assurancePnoAnnuel {
+    double base = _parse(_assurancePno);
+    return base * pow(1.02, _anneeRelative) * (_nombreMoisActifsAnnee / 12);
+  }
+
+  // Taxe foncière avec inflation 2% par an et proratisation
+  double get _taxeFonciereAnnuel {
+    double base = _parse(_taxeFonciere);
+    return base * pow(1.02, _anneeRelative) * (_nombreMoisActifsAnnee / 12);
+  }
+
+  // Total des charges annuelles (hors intérêts)
+  double get _totalChargesAnnuel => _fraisBancairesAnnuel + _assuranceCreditAnnuel + _fraisNotaireAnnuel + _travauxAnnuel + _assurancePnoAnnuel + _taxeFonciereAnnuel;
+
+  // Résultat net annuel = Résultat d'exploitation - Total charges
+  double get _resultatNet => _resultatExploitation - _totalChargesAnnuel;
 
   // Retourne les intérêts pour l'année sélectionnée (déjà calculés depuis Sheets)
   double _interetsAnnee() {
@@ -77,10 +147,11 @@ class _SimulationScreenState extends State<SimulationScreen> {
   }
 
   double get _totalChargesMensuelles {
-    final assurance = double.tryParse(_assurancePno.text.replaceAll(',', '.')) ?? 0;
+    final assurancePno = double.tryParse(_assurancePno.text.replaceAll(',', '.')) ?? 0;
     final copro = double.tryParse(_copropriete.text.replaceAll(',', '.')) ?? 0;
     final taxe = double.tryParse(_taxeFonciere.text.replaceAll(',', '.')) ?? 0;
-    return (assurance + copro + taxe) / 12;
+    final assuranceCredit = double.tryParse(_assuranceCredit.text.replaceAll(',', '.')) ?? 0;
+    return (assurancePno + copro + taxe + assuranceCredit) / 12;
   }
 
   double get _cashflow => _totalLoyers - _totalChargesMensuelles;
@@ -132,6 +203,8 @@ class _SimulationScreenState extends State<SimulationScreen> {
       writes.add(sheets.writeCell('Emprunt', 'J12', _parse(_copropriete)));
       debugPrint('Taxe foncière: ${_parse(_taxeFonciere)} → J13');
       writes.add(sheets.writeCell('Emprunt', 'J13', _parse(_taxeFonciere)));
+      debugPrint('Assurance crédit: ${_parse(_assuranceCredit)} → J14');
+      writes.add(sheets.writeCell('Emprunt', 'J14', _parse(_assuranceCredit)));
 
       // 2) Écriture des paramètres emprunt dans l'onglet "Emprunt"
       writes.addAll([
@@ -186,6 +259,7 @@ class _SimulationScreenState extends State<SimulationScreen> {
         }
 
         if (dateDebut != null) {
+          _dateDebutEmprunt = dateDebut;
           // Lire TOUTES les données capital/intérêts en UN SEUL appel via readRange
           // Cela évite les quotas Google et réduit le temps de 100s à ~2-3s
           final moisAConsulter = _amortissement.clamp(0, 360);
@@ -278,6 +352,7 @@ class _SimulationScreenState extends State<SimulationScreen> {
     _assurancePno.dispose();
     _copropriete.dispose();
     _taxeFonciere.dispose();
+    _assuranceCredit.dispose();
     // Emprunt
     _nbAnnees.dispose();
     _taux.dispose();
@@ -359,6 +434,8 @@ class _SimulationScreenState extends State<SimulationScreen> {
         _Champ(label: 'Taux d\'emprunt', controller: _taux, onChanged: (_) => setState(() {}), suffix: '%'),
         const SizedBox(height: 12),
         _Champ(label: 'Date début emprunt (MM-AAAA)', controller: _dateDebut, onChanged: (_) => setState(() {}), suffix: ''),
+        const SizedBox(height: 12),
+        _Champ(label: 'Assurance crédit (annuelle)', controller: _assuranceCredit, onChanged: (_) => setState(() {}), suffix: '€'),
         const SizedBox(height: 20),
 
         // ── Bouton calculer ────────────────────────────────────────────────────
@@ -487,6 +564,78 @@ class _SimulationScreenState extends State<SimulationScreen> {
             cashflow: _cashflow,
             typeBien: _typeBien,
             nbApparts: _nbApparts,
+            loyerAnnuel: _loyerAnnuel,
+          ),
+          const SizedBox(height: 24),
+
+          // ── Résultat d'exploitation annuel ─────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Column(children: [
+              _Ligne('Loyer annuel', _loyerAnnuel),
+              _Ligne('Intérêts emprunt annuels', _interetsAnnuel, couleur: const Color(0xFFEF5350)),
+              const Divider(height: 16),
+              _Ligne('Résultat d\'exploitation', _resultatExploitation, gras: true, couleur: const Color(0xFF4CAF50)),
+            ]),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Charges annuelles détaillées ───────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Charges annuelles', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              if (_fraisBancairesAnnuel > 0)
+                _Ligne('Frais bancaires', _fraisBancairesAnnuel),
+              _Ligne('Assurance crédit', _assuranceCreditAnnuel),
+              if (_fraisNotaireAnnuel > 0)
+                _Ligne('Frais de notaire', _fraisNotaireAnnuel),
+              if (_travauxAnnuel > 0)
+                _Ligne('Travaux', _travauxAnnuel),
+              _Ligne('Assurance PNO', _assurancePnoAnnuel),
+              _Ligne('Taxe foncière', _taxeFonciereAnnuel),
+              const Divider(height: 16),
+              _Ligne('Total charges', _totalChargesAnnuel, gras: true, couleur: const Color(0xFFEF5350)),
+            ]),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Résultat net annuel ─────────────────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.grey[900],
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(children: [
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Résultat net annuel', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text('Année $_anneeSelection', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              ])),
+              Text(
+                _euro.format(_resultatNet),
+                style: TextStyle(
+                  color: _resultatNet >= 0 ? const Color(0xFF4CAF50) : const Color(0xFFEF5350),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ]),
           ),
           const SizedBox(height: 32),
         ],
@@ -781,6 +930,7 @@ class _ResultatsCashFlow extends StatelessWidget {
   final double cashflow;
   final String typeBien;
   final int nbApparts;
+  final double? loyerAnnuel;
 
   const _ResultatsCashFlow({
     required this.totalLoyers,
@@ -788,10 +938,12 @@ class _ResultatsCashFlow extends StatelessWidget {
     required this.cashflow,
     required this.typeBien,
     required this.nbApparts,
+    this.loyerAnnuel,
   });
 
   @override
   Widget build(BuildContext context) {
+    final String sousTitre = typeBien == 'immeuble' ? '$nbApparts appartement(s)' : 'Loyer mensuel';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -800,53 +952,38 @@ class _ResultatsCashFlow extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(children: [
+        if (loyerAnnuel != null)
+          _BlocResultat(
+            label: 'Loyer annuel',
+            sousTitre: sousTitre,
+            valeur: loyerAnnuel!,
+            couleur: const Color(0xFF4CAF50),
+          ),
+        if (loyerAnnuel != null) const SizedBox(height: 12),
         // Recettes mensuelles
-        Row(children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Recettes mensuelles', style: TextStyle(color: const Color(0xFF4CAF50), fontSize: 13, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text(
-                  typeBien == 'immeuble' ? '$nbApparts appartement(s)' : 'Loyer mensuel',
-                  style: const TextStyle(color: Colors.white54, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          Text(_euro.format(totalLoyers), style: const TextStyle(color: Color(0xFF4CAF50), fontSize: 16, fontWeight: FontWeight.w700)),
-        ]),
-        const SizedBox(height: 12),
+        _BlocResultat(
+          label: 'Recettes mensuelles',
+          sousTitre: sousTitre,
+          valeur: totalLoyers,
+          couleur: const Color(0xFF4CAF50),
+        ),
+        const Divider(color: Colors.white24, height: 28),
         // Charges mensuelles
-        Row(children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Charges mensuelles', style: TextStyle(color: const Color(0xFFEF5350), fontSize: 13, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                const Text('Charges annuelles ÷ 12', style: TextStyle(color: Colors.white54, fontSize: 11)),
-              ],
-            ),
-          ),
-          Text(_euro.format(totalCharges), style: const TextStyle(color: Color(0xFFEF5350), fontSize: 16, fontWeight: FontWeight.w700)),
-        ]),
-        const Divider(color: Colors.white24, height: 24),
+        _BlocResultat(
+          label: 'Charges mensuelles',
+          sousTitre: 'Charges annuelles ÷ 12',
+          valeur: totalCharges,
+          couleur: const Color(0xFFEF5350),
+        ),
+        const Divider(color: Colors.white24, height: 28),
         // Cash-flow
-        Row(children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Cash-flow', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 2),
-                const Text('Recettes - Charges', style: TextStyle(color: Colors.white54, fontSize: 11)),
-              ],
-            ),
-          ),
-          Text(_euro.format(cashflow), style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
-        ]),
+        _BlocResultat(
+          label: 'Cash-flow',
+          sousTitre: 'Recettes - Charges',
+          valeur: cashflow,
+          couleur: Colors.white,
+          grand: true,
+        ),
       ]),
     );
   }
