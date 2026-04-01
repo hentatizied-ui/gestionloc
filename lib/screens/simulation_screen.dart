@@ -127,8 +127,8 @@ class _SimulationScreenState extends State<SimulationScreen> {
       final writeResults = await Future.wait(writes);
       debugPrint('Résultats écriture loyers/charges: $writeResults');
 
-      // 3) Attendre le recalcul Sheets
-      await Future.delayed(const Duration(seconds: 2));
+      // 3) Attendre le recalcul Sheets (réduit pour améliorer performance)
+      await Future.delayed(const Duration(milliseconds: 1000)); // 1 seconde au lieu de 2
 
       // 4) Lire les résultats emprunt (D10 = échéance)
       final echeance = await sheets.readCell('Emprunt', 'D10');
@@ -366,50 +366,77 @@ class _SimulationScreenState extends State<SimulationScreen> {
           const Text('Résultats emprunt', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
 
-          // Navigation des années (flèches gauche/droite)
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Bouton gauche
-              IconButton(
-                icon: const Icon(Icons.chevron_left),
-                color: _anneeSelection > _anneesDisponibles.first ? Colors.white : Colors.grey,
-                onPressed: _anneeSelection > _anneesDisponibles.first
-                    ? () {
-                        setState(() {
-                          _anneeSelection = _anneesDisponibles[_anneesDisponibles.indexOf(_anneeSelection) - 1];
-                        });
-                      }
-                    : null,
-              ),
-
-              // Affichage de l'année courante
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.grey[800],
-                  borderRadius: BorderRadius.circular(8),
+          // Navigation des années (slider centré avec marqueurs)
+          if (_anneesDisponibles.length > 1)
+            Column(
+              children: [
+                // Slider horizontal
+                SliderTheme(
+                  data: SliderThemeData(
+                    trackHeight: 4,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+                    activeTrackColor: AppTheme.primary,
+                    inactiveTrackColor: Colors.grey[700],
+                    thumbColor: Colors.white,
+                    overlayColor: AppTheme.primary.withValues(alpha: 0.2),
+                    tickMarkShape: const RoundSliderTickMarkShape(tickMarkRadius: 2),
+                    tickMarkColor: Colors.grey[600],
+                    activeTickMarkColor: AppTheme.primary,
+                    showValueIndicator: ShowValueIndicator.disabled,
+                  ),
+                  child: Slider(
+                    value: _anneesDisponibles.indexOf(_anneeSelection).toDouble(),
+                    min: 0,
+                    max: (_anneesDisponibles.length - 1).toDouble(),
+                    divisions: _anneesDisponibles.length - 1,
+                    onChanged: (value) {
+                      setState(() {
+                        _anneeSelection = _anneesDisponibles[value.toInt()];
+                      });
+                    },
+                  ),
                 ),
-                child: Text(
+                // Marqueurs d'années (labels sous le slider)
+                SizedBox(
+                  height: 24,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      ..._anneesDisponibles.map((annee) {
+                        // Afficher seulement certaines années si trop nombreuses
+                        final shouldShow = _anneesDisponibles.length <= 10 ||
+                            annee % 5 == 0 ||
+                            annee == _anneesDisponibles.first ||
+                            annee == _anneesDisponibles.last;
+                        if (!shouldShow) return const SizedBox.shrink();
+                        final isSelected = annee == _anneeSelection;
+                        return Expanded(
+                          child: Text(
+                            annee.toString(),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: isSelected ? AppTheme.primary : Colors.grey[600],
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                ),
+                // Label de l'année sélectionnée (centré)
+                const SizedBox(height: 8),
+                Text(
                   'Année $_anneeSelection',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-
-              // Bouton droite
-              IconButton(
-                icon: const Icon(Icons.chevron_right),
-                color: _anneeSelection < _anneesDisponibles.last ? Colors.white : Colors.grey,
-                onPressed: _anneeSelection < _anneesDisponibles.last
-                    ? () {
-                        setState(() {
-                          _anneeSelection = _anneesDisponibles[_anneesDisponibles.indexOf(_anneeSelection) + 1];
-                        });
-                      }
-                    : null,
-              ),
-            ],
-          ),
+              ],
+            ),
           const SizedBox(height: 16),
 
           Container(
