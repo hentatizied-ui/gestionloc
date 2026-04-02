@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:math';
 import 'package:flutter/services.dart'; // Pour TextInputFormatter
+import 'package:fl_chart/fl_chart.dart'; // Pour graphiques
 import '../services/sheets_service.dart';
 import '../config/app_config.dart'; // Pour config Sheets
 import '../main.dart'; // Pour AppTheme
@@ -457,7 +458,7 @@ class _SimulationScreenState extends State<SimulationScreen> {
             icon: _calculEnCours
                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.calculate_outlined),
-            label: Text(_calculEnCours ? 'Calcul en cours...' : 'Calculer depuis Sheets'),
+            label: Text(_calculEnCours ? 'Simulation en cours...' : 'Simulation'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1565C0),
               foregroundColor: Colors.white,
@@ -470,7 +471,7 @@ class _SimulationScreenState extends State<SimulationScreen> {
 
         // ── Résultats Emprunt ───────────────────────────────────────────────────
         if (_echeance != null) ...[
-          const Text('Résultats emprunt', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          const Text('Résultats de la simulation', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
 
           // Navigation des années (flèches simples centrées)
@@ -594,8 +595,8 @@ class _SimulationScreenState extends State<SimulationScreen> {
             ]),
           ),
           const SizedBox(height: 24),
-          const Text('Cash-flow mensuel', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 12),
+
+          // ── Loyer annuel ───────────────────────────────────────────────────────
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
@@ -604,64 +605,13 @@ class _SimulationScreenState extends State<SimulationScreen> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.grey[200]!),
             ),
-            child: Column(children: [
-              _Ligne('💰 Recettes mensuelles', _totalLoyers,
-                  couleur: const Color(0xFF4CAF50)),
-              const SizedBox(height: 8),
-              _Ligne('💸 Charges mensuelles', _totalChargesMensuelles,
-                  couleur: const Color(0xFFEF5350)),
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: _cashflow >= 0
-                      ? const Color(0xFF4CAF50).withValues(alpha: 0.06)
-                      : const Color(0xFFEF5350).withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: _cashflow >= 0
-                        ? const Color(0xFF4CAF50).withValues(alpha: 0.2)
-                        : const Color(0xFFEF5350).withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Row(children: [
-                  Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '📊 Cash-flow mensuel',
-                            style: TextStyle(
-                              color: _cashflow >= 0
-                                  ? const Color(0xFF4CAF50)
-                                  : const Color(0xFFEF5350),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const Text(
-                            'Recettes - Charges',
-                            style: TextStyle(
-                              color: Colors.grey,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ]),
-                  ),
-                  Text(
-                    _euro.format(_cashflow),
-                    style: TextStyle(
-                      color: _cashflow >= 0
-                          ? const Color(0xFF4CAF50)
-                          : const Color(0xFFEF5350),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ]),
-              ),
-            ]),
+            child: _LigneCalculee(
+              label: '🏠 Loyer annuel',
+              valeur: _loyerAnnuel,
+              actif: true,
+              suffix: '€',
+              couleur: const Color(0xFF4CAF50),
+            ),
           ),
           const SizedBox(height: 24),
 
@@ -674,12 +624,7 @@ class _SimulationScreenState extends State<SimulationScreen> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.grey[200]!),
             ),
-            child: Column(children: [
-              _Ligne('Loyer annuel', _loyerAnnuel),
-              _Ligne('Intérêts emprunt annuels', _interetsAnnuel, couleur: const Color(0xFFEF5350)),
-              const Divider(height: 16),
-              _Ligne('Résultat d\'exploitation', _resultatExploitation, gras: true, couleur: const Color(0xFF4CAF50)),
-            ]),
+            child: _Ligne('Résultat d\'exploitation', _resultatExploitation, gras: true, couleur: const Color(0xFF4CAF50)),
           ),
           const SizedBox(height: 16),
 
@@ -801,6 +746,18 @@ class _SimulationScreenState extends State<SimulationScreen> {
             ]),
           ),
           const SizedBox(height: 32),
+
+          // ── Graphique Cash Flow Annuel ───────────────────────────────────────
+          if (_interetsParAnnee.isNotEmpty && _dateDebutEmprunt != null)
+            _CashFlowChart(
+              interetsParAnnee: _interetsParAnnee,
+              capitalParAnnee: _capitalParAnnee,
+              anneeDebut: _dateDebutEmprunt!.year,
+              dureeAnnees: _amortissement,
+              loyerAnnuel: _loyerAnnuel,
+              totalChargesAnnuel: _totalChargesAnnuel,
+              nbAnneesTotal: _nbAnneesVal,
+            ),
         ],
       ]),
     );
@@ -1060,6 +1017,185 @@ class DateEmpruntInputFormatter extends TextInputFormatter {
     return TextEditingValue(
       text: formatted,
       selection: TextSelection.collapsed(offset: cursorPos),
+    );
+  }
+}
+
+// ── Graphique Cash Flow Annuel ───────────────────────────────────────────────────
+class _CashFlowChart extends StatelessWidget {
+  final Map<int, double> interetsParAnnee;
+  final Map<int, double> capitalParAnnee;
+  final int anneeDebut;
+  final int dureeAnnees;
+  final double loyerAnnuel;
+  final double totalChargesAnnuel; // Charges fixes annuelles (hors intérêts)
+  final int nbAnneesTotal;
+
+  const _CashFlowChart({
+    required this.interetsParAnnee,
+    required this.capitalParAnnee,
+    required this.anneeDebut,
+    required this.dureeAnnees,
+    required this.loyerAnnuel,
+    required this.totalChargesAnnuel,
+    required this.nbAnneesTotal,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (interetsParAnnee.isEmpty) return const SizedBox.shrink();
+
+    // Préparer les données : années X, cash-flow Y
+    final annees = <int>[];
+    final cashFlows = <double>[];
+
+    // Période complète de l'emprunt (années civiles)
+    for (int annee = anneeDebut + 1; annee <= anneeDebut + nbAnneesTotal; annee++) {
+      annees.add(annee);
+      final interets = interetsParAnnee[annee] ?? 0;
+      final capital = capitalParAnnee[annee] ?? 0;
+      // Cash-flow annuel = Loyer annuel - Intérêts - Charges - Capital
+      final cashFlow = loyerAnnuel - interets - totalChargesAnnuel - capital;
+      cashFlows.add(cashFlow);
+    }
+
+    if (cashFlows.isEmpty) return const SizedBox.shrink();
+
+    final maxVal = cashFlows.map((e) => e.abs()).reduce((a, b) => a > b ? a : b);
+    final maxY = maxVal * 1.2;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text(
+          '📈 Évolution du Cash Flow Annuel',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 200,
+          child: LineChart(
+            LineChartData(
+              gridData: FlGridData(
+                show: true,
+                drawVerticalLine: true,
+                horizontalInterval: maxY / 4,
+                verticalInterval: 1,
+                getDrawingHorizontalLine: (value) => FlLine(
+                  color: Colors.grey[300]!,
+                  strokeWidth: 1,
+                ),
+                getDrawingVerticalLine: (value) => FlLine(
+                  color: Colors.grey[300]!,
+                  strokeWidth: 1,
+                ),
+              ),
+              titlesData: FlTitlesData(
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    interval: 1,
+                    getTitlesWidget: (value, meta) {
+                      final index = value.toInt();
+                      if (index >= 0 && index < annees.length) {
+                        return Text(
+                          annees[index].toString(),
+                          style: const TextStyle(fontSize: 10, color: Colors.grey),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    interval: maxY / 4,
+                    getTitlesWidget: (value, meta) {
+                      return Text(
+                        '${_euro.format(value)}',
+                        style: const TextStyle(fontSize: 10, color: Colors.grey),
+                      );
+                    },
+                  ),
+                ),
+                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              ),
+              borderData: FlBorderData(show: true, border: Border.all(color: Colors.grey[300]!)),
+              minX: 0,
+              maxX: (annees.length - 1).toDouble(),
+              minY: -maxY,
+              maxY: maxY,
+              lineBarsData: [
+                LineChartBarData(
+                  spots: List.generate(cashFlows.length, (i) => FlSpot(i.toDouble(), cashFlows[i])),
+                  isCurved: true,
+                  color: const Color(0xFF4CAF50),
+                  barWidth: 3,
+                  belowBarData: BarAreaData(show: false),
+                  dotData: FlDotData(show: true),
+                ),
+              ],
+              extraLinesData: ExtraLinesData(
+                horizontalLines: [
+                  HorizontalLine(
+                    y: 0,
+                    color: Colors.grey[400]!,
+                    strokeWidth: 1.5,
+                    dashArray: [5, 5],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 40,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: annees.asMap().entries.map((entry) {
+              final cashFlow = cashFlows[entry.key];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Column(
+                  children: [
+                    Text(
+                      '${_euro.format(cashFlow)}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: cashFlow >= 0 ? const Color(0xFF4CAF50) : const Color(0xFFEF5350),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4CAF50),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Text(
+                      '${annees[entry.key]}',
+                      style: const TextStyle(fontSize: 9, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    ),
     );
   }
 }
