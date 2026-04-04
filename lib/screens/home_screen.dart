@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/user_service.dart';
 import '../services/data_service.dart';
+import '../main.dart' show AppTheme;
 import 'dashboard_screen.dart';
 import 'biens_screen.dart';
 import 'locataires_screen.dart';
@@ -24,69 +25,204 @@ class _HomeScreenState extends State<HomeScreen> {
     FinancesScreen(), ComptaScreen(), SimulationScreen(),
   ];
 
-  final List<String> _titles = ['Tableau de bord', 'Mes Biens', 'Locataires', 'Finances', 'Comptabilité', 'Simulation'];
+  static const _titles = [
+    'Tableau de bord', 'Mes Biens', 'Locataires',
+    'Finances', 'Comptabilité', 'Simulation',
+  ];
+
+  static const _destinations = [
+    NavigationDestination(
+      icon: Icon(Icons.dashboard_outlined),
+      selectedIcon: Icon(Icons.dashboard_rounded),
+      label: 'Accueil',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.home_work_outlined),
+      selectedIcon: Icon(Icons.home_work_rounded),
+      label: 'Biens',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.people_outline_rounded),
+      selectedIcon: Icon(Icons.people_rounded),
+      label: 'Locataires',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.account_balance_wallet_outlined),
+      selectedIcon: Icon(Icons.account_balance_wallet_rounded),
+      label: 'Finances',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.analytics_outlined),
+      selectedIcon: Icon(Icons.analytics_rounded),
+      label: 'Compta',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.calculate_outlined),
+      selectedIcon: Icon(Icons.calculate_rounded),
+      label: 'Simulation',
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
     final data = context.watch<DataService>();
     final user = context.watch<UserService>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(_titles[_currentIndex]),
         actions: [
+          // Sync loading indicator
           if (data.loading)
-            const Padding(
-              padding: EdgeInsets.only(right: 16),
-              child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Center(
+                child: SizedBox(
+                  width: 18, height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppTheme.primary,
+                  ),
+                ),
+              ),
             ),
-          PopupMenuButton(
-            icon: CircleAvatar(
-              backgroundColor: const Color(0xFFB5D4F4),
-              radius: 16,
-              child: Text(user.initiales, style: const TextStyle(fontSize: 11, color: Color(0xFF042C53), fontWeight: FontWeight.w500)),
+
+          // User avatar menu
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: PopupMenuButton(
+              offset: const Offset(0, 48),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              child: _UserAvatar(initiales: user.initiales),
+              itemBuilder: (_) => <PopupMenuEntry>[
+                PopupMenuItem(
+                  value: 'name',
+                  enabled: false,
+                  child: _MenuHeader(name: user.displayName),
+                ),
+                const PopupMenuDivider(height: 1),
+                _menuItem(Icons.sync_rounded, 'Synchroniser', 'refresh'),
+                const PopupMenuDivider(height: 1),
+                _menuItem(Icons.logout_rounded, 'Changer d\'utilisateur', 'logout',
+                    color: AppTheme.danger),
+              ],
+              onSelected: (v) async {
+                if (v == 'refresh') {
+                  context.read<DataService>().loadAll();
+                } else if (v == 'logout') {
+                  await context.read<UserService>().clearUser();
+                  if (mounted) {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+                    );
+                  }
+                }
+              },
             ),
-            itemBuilder: (_) => [
-              PopupMenuItem(value: 'name', child: Row(children: [
-                const Icon(Icons.person_outline, size: 18),
-                const SizedBox(width: 8),
-                Text(user.displayName),
-              ])),
-              const PopupMenuItem(value: 'refresh', child: Row(children: [
-                Icon(Icons.sync, size: 18), SizedBox(width: 8), Text('Synchroniser'),
-              ])),
-              const PopupMenuItem(value: 'logout', child: Row(children: [
-                Icon(Icons.logout, size: 18), SizedBox(width: 8), Text('Changer d\'utilisateur'),
-              ])),
-            ],
-            onSelected: (v) async {
-              if (v == 'refresh') {
-                context.read<DataService>().loadAll();
-              } else if (v == 'logout') {
-                await context.read<UserService>().clearUser();
-                if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const WelcomeScreen()));
-              }
-            },
           ),
-          const SizedBox(width: 8),
         ],
       ),
+
       body: IndexedStack(index: _currentIndex, children: _screens),
+
       bottomNavigationBar: Container(
-        decoration: BoxDecoration(border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant, width: 0.5))),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (i) => setState(() => _currentIndex = i),
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: 'Accueil'),
-            BottomNavigationBarItem(icon: Icon(Icons.home_work_outlined), label: 'Biens'),
-            BottomNavigationBarItem(icon: Icon(Icons.people_outline), label: 'Locataires'),
-            BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_outlined), label: 'Finances'),
-            BottomNavigationBarItem(icon: Icon(Icons.bar_chart_outlined), label: 'Compta'),
-            BottomNavigationBarItem(icon: Icon(Icons.calculate_outlined), label: 'Simulation'),
-          ],
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color: isDark
+                ? const Color(0xFF2E3347)
+                : const Color(0xFFE5E7EB),
+              width: 0.5,
+            ),
+          ),
+        ),
+        child: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (i) => setState(() => _currentIndex = i),
+          destinations: _destinations,
         ),
       ),
     );
+  }
+
+  PopupMenuItem _menuItem(IconData icon, String label, String value, {Color? color}) {
+    return PopupMenuItem(
+      value: value,
+      height: 44,
+      child: Row(children: [
+        Icon(icon, size: 18, color: color ?? Theme.of(context).colorScheme.onSurface),
+        const SizedBox(width: 10),
+        Text(label, style: TextStyle(fontSize: 14, color: color)),
+      ]),
+    );
+  }
+}
+
+// ── User avatar ──────────────────────────────────────────────────────────────
+
+class _UserAvatar extends StatelessWidget {
+  final String initiales;
+  const _UserAvatar({required this.initiales});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 34, height: 34,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1D9E75), Color(0xFF16C181)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primary.withValues(alpha: 0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Text(
+          initiales.toUpperCase(),
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Menu header ──────────────────────────────────────────────────────────────
+
+class _MenuHeader extends StatelessWidget {
+  final String name;
+  const _MenuHeader({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(children: [
+      Container(
+        width: 32, height: 32,
+        decoration: BoxDecoration(
+          color: AppTheme.primary.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Icon(Icons.person_rounded, size: 16, color: AppTheme.primary),
+      ),
+      const SizedBox(width: 10),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Text(name, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface)),
+        Text('Connecté', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+      ]),
+    ]);
   }
 }
