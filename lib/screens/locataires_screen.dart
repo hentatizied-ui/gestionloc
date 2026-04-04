@@ -1,13 +1,9 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:url_launcher/url_launcher.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../services/data_service.dart';
-import '../services/user_service.dart';
 import '../services/pdf_service.dart';
 import '../models/models.dart';
 import '../main.dart';

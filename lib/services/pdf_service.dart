@@ -1,10 +1,12 @@
 import 'dart:typed_data';
+import 'dart:math';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../models/models.dart';
+
+// ignore_for_file: avoid_positional_boolean_parameters
 
 final _pdfEuro = NumberFormat.currency(locale: 'fr_FR', symbol: 'EUR', decimalDigits: 2);
 final _pdfDateF = DateFormat('dd/MM/yyyy', 'fr_FR');
@@ -180,7 +182,7 @@ class PdfService {
       final r = m % 100;
       final centStr = c == 1 ? 'cent' : '${unite[c]} cents';
       if (r == 0) return centStr;
-      return '${c == 1 ? 'cent' : unite[c] + ' cent'} ${_montantEnLettres(r.toDouble())}';
+      return '${c == 1 ? 'cent' : '${unite[c]} cent'} ${_montantEnLettres(r.toDouble())}';
     }
     if (m < 2000) {
       final r = m % 1000;
@@ -302,4 +304,276 @@ class PdfService {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // SIMULATION PDF
+  // ─────────────────────────────────────────────────────────────────────────
+
+  static Future<Uint8List> genererSimulation({
+    required double prixAchat,
+    required double honoraires,
+    required double travaux,
+    required double fraisBancaires,
+    required double apport,
+    required double fraisNotaire,
+    required double coutAcquisition,
+    required double montantEmprunt,
+    required String typeBien,
+    required int nbApparts,
+    required List<double> loyers,
+    required double assurancePno,
+    required double copropriete,
+    required double taxeFonciere,
+    required int nbAnnees,
+    required double taux,
+    required String dateDebut,
+    required int amortissement,
+    required double echeance,
+    required List<int> annees,
+    required Map<String, List<double>> resultats,
+  }) async {
+    final pdf = pw.Document();
+    final font     = pw.Font.helvetica();
+    final fontBold = pw.Font.helveticaBold();
+    final euro     = NumberFormat.currency(locale: 'fr_FR', symbol: 'EUR', decimalDigits: 0);
+    final dateStr  = DateFormat('dd/MM/yyyy').format(DateTime.now());
+
+    final sTitle  = pw.TextStyle(font: fontBold, fontSize: 15, color: PdfColors.blue900);
+    final sHead   = pw.TextStyle(font: fontBold, fontSize: 11, color: PdfColors.white);
+    final sBold   = pw.TextStyle(font: fontBold, fontSize: 9);
+    final sSmall  = pw.TextStyle(font: font,     fontSize: 8,  color: PdfColors.grey700);
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+    pw.Widget param(String label, String val) => pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 2),
+      child: pw.Row(children: [
+        pw.SizedBox(width: 145, child: pw.Text(label, style: sSmall)),
+        pw.Expanded(child: pw.Text(val, style: sBold)),
+      ]),
+    );
+
+    pw.Widget sectionBox(String title, List<pw.Widget> children) => pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Container(
+          width: double.infinity,
+          color: PdfColors.blue800,
+          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: pw.Text(title, style: sHead),
+        ),
+        pw.Container(
+          width: double.infinity,
+          padding: const pw.EdgeInsets.all(8),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.blue200),
+          ),
+          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: children),
+        ),
+        pw.SizedBox(height: 10),
+      ],
+    );
+
+    // ─── PAGE 1 : PARAMÈTRES ───────────────────────────────────────────────
+    pdf.addPage(pw.Page(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.symmetric(horizontal: 30, vertical: 30),
+      build: (ctx) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.Center(child: pw.Text('SIMULATION D\'ACQUISITION', style: sTitle)),
+        pw.SizedBox(height: 3),
+        pw.Center(child: pw.Text('Généré le $dateStr', style: sSmall)),
+        pw.SizedBox(height: 18),
+
+        // Acquisition | Recettes (2 colonnes)
+        pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+          pw.Expanded(child: sectionBox('ACQUISITION', [
+            param('Prix d\'achat',         euro.format(prixAchat)),
+            param('Honoraires',            euro.format(honoraires)),
+            param('Travaux',               euro.format(travaux)),
+            param('Frais bancaires',       euro.format(fraisBancaires)),
+            param('Apport',                euro.format(apport)),
+            param('Frais de notaire (8%)', euro.format(fraisNotaire)),
+          ])),
+          pw.SizedBox(width: 16),
+          pw.Expanded(child: sectionBox('RECETTES & CHARGES', [
+            param('Type de bien', typeBien == 'independant'
+                ? 'Indépendant'
+                : 'Immeuble ($nbApparts apparts)'),
+            ...List.generate(loyers.length, (i) =>
+                param('Loyer appart ${i + 1}', euro.format(loyers[i]))),
+            param('Total loyers/mois', euro.format(loyers.fold(0.0, (a, b) => a + b))),
+            param('Assurance PNO',         euro.format(assurancePno)),
+            param('Copropriété',           euro.format(copropriete)),
+            param('Taxe foncière',         euro.format(taxeFonciere)),
+          ])),
+        ]),
+
+        sectionBox('EMPRUNT', [
+          pw.Row(children: [
+            pw.Expanded(child: param('Durée',          '$nbAnnees ans')),
+            pw.Expanded(child: param('Amortissement',  '$amortissement mois')),
+          ]),
+          pw.Row(children: [
+            pw.Expanded(child: param('Taux',       '${taux.toStringAsFixed(2)} %')),
+            pw.Expanded(child: param('Date début', dateDebut)),
+          ]),
+        ]),
+
+        // Récapitulatif financier
+        pw.Container(
+          width: double.infinity,
+          padding: const pw.EdgeInsets.all(12),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.blue50,
+            border: pw.Border.all(color: PdfColors.blue800),
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+          ),
+          child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
+            _kpiCard('Coût acquisition',   euro.format(coutAcquisition), fontBold, font),
+            _kpiCard('Montant emprunt',    euro.format(montantEmprunt),  fontBold, font),
+            _kpiCard('Échéance mensuelle', euro.format(echeance),        fontBold, font),
+            _kpiCard('Durée',             '$nbAnnees ans / $amortissement mois', fontBold, font),
+          ]),
+        ),
+      ]),
+    ));
+
+    // ─── PAGES RÉSULTATS (landscape, 10 ans/page) ─────────────────────────
+    const _metriques = [
+      ('Intérêts par année',       'interets',             false),
+      ('Capital emprunt',          'capitalEmprunt',       false),
+      ('Echéance annuelle',        'echeance',             false),
+      ('Capital remboursé',        'capitalRembourse',     false),
+      ('Loyer avec augmentation',  'loyer',                false),
+      ('Résultat exploitation',    'resultatExploitation', false),
+      ('Frais bancaire',           'fraisBancaire',        false),
+      ('Frais de notaire',         'fraisNotaire',         false),
+      ('Assurance PNO',            'assurancePno',         false),
+      ('Taxe Foncière',            'taxeFonciere',         false),
+      ('Travaux',                  'travaux',              false),
+      ('Résultat net',             'resultatNet',          false),
+      ('Déficit Reportable',       'deficitReportable',    false),
+      ('Résultat Fiscal',          'resultatFiscal',       false),
+      ('Prél. Sociaux (17.2%)',    'prelevementsSociaux',  false),
+      ('Impôts (TMI 30%)',         'impots',               false),
+      ('CAF (Hors travaux)',       'cafHorsTravaux',       false),
+      ('CAF Nette',                'cafNette',             false),
+      ('Taux Renta Brut',          'tauxRentaBrut',        true),
+      ('Taux Renta Net',           'tauxRentaNet',         true),
+      ('Impact capacité emprunt',  'impactCapacite',       false),
+    ];
+
+    const _financialKeys = {'resultatExploitation', 'resultatNet', 'resultatFiscal', 'cafHorsTravaux', 'cafNette'};
+    const _chargeKeys    = {'fraisBancaire', 'fraisNotaire', 'assurancePno', 'taxeFonciere', 'travaux'};
+    const _tauxKeys      = {'tauxRentaBrut', 'tauxRentaNet'};
+    const _sepAfter      = {3, 10}; // séparateur visuel après ces indices
+
+    PdfColor cellColor(String key, double v) {
+      if (_financialKeys.contains(key)) return v >= 0 ? PdfColors.green700 : PdfColors.red700;
+      if (_chargeKeys.contains(key))    return PdfColors.grey700;
+      if (_tauxKeys.contains(key))      return PdfColors.blue800;
+      if (key == 'loyer')               return PdfColors.blue700;
+      return PdfColors.black;
+    }
+
+    String fmtVal(bool isPercent, double v) =>
+        isPercent ? '${(v * 100).toStringAsFixed(2)}%' : euro.format(v);
+
+    const int yearsPerPage = 10;
+    final int nbPages = max(1, ((annees.length - 1) ~/ yearsPerPage) + 1);
+    const double labelW = 135.0;
+    // Landscape A4 usable: 841.89 - 40 margins = ~802pt
+    const double totalW = 802.0;
+
+    for (int p = 0; p < nbPages; p++) {
+      final int start  = p * yearsPerPage;
+      final int end    = min(start + yearsPerPage, annees.length);
+      final pageYears  = annees.sublist(start, end);
+      final int nCols  = pageYears.length;
+      final double colW = (totalW - labelW) / nCols;
+
+      // ── cellules ──────────────────────────────────────────────────────
+      pw.Widget hCell(String t, {bool isLabel = false}) => pw.Container(
+        width: isLabel ? labelW : colW,
+        height: 20,
+        color: PdfColors.blue800,
+        alignment: pw.Alignment.center,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 2),
+        child: pw.Text(t,
+          style: pw.TextStyle(font: fontBold, fontSize: 8, color: PdfColors.white),
+          textAlign: pw.TextAlign.center,
+        ),
+      );
+
+      pw.Widget dCell(String t, {PdfColor? color, bool isLabel = false, bool alt = false}) => pw.Container(
+        width: isLabel ? labelW : colW,
+        height: 16,
+        color: alt ? PdfColors.grey200 : PdfColors.white,
+        alignment: isLabel ? pw.Alignment.centerLeft : pw.Alignment.centerRight,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 4),
+        child: pw.Text(t,
+          style: pw.TextStyle(font: isLabel ? fontBold : font, fontSize: 7, color: color ?? PdfColors.black),
+          textAlign: isLabel ? pw.TextAlign.left : pw.TextAlign.right,
+        ),
+      );
+
+      final List<pw.Widget> rows = [
+        // En-tête
+        pw.Row(children: [
+          hCell('Indicateur', isLabel: true),
+          ...pageYears.map((y) => hCell(y.toString())),
+        ]),
+      ];
+
+      for (int mi = 0; mi < _metriques.length; mi++) {
+        final (label, key, isPercent) = _metriques[mi];
+        final vals = resultats[key] ?? [];
+
+        // Séparateur visuel
+        if (_sepAfter.contains(mi)) {
+          rows.add(pw.Container(height: 4, color: PdfColors.blue100));
+        }
+
+        final bool alt = mi % 2 == 0;
+        rows.add(pw.Row(children: [
+          dCell(label, isLabel: true, alt: alt),
+          ...List.generate(nCols, (ci) {
+            final gi = start + ci;
+            final v  = gi < vals.length ? vals[gi] : 0.0;
+            return dCell(fmtVal(isPercent, v), color: cellColor(key, v), alt: alt);
+          }),
+        ]));
+      }
+
+      pdf.addPage(pw.Page(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        build: (ctx) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Center(child: pw.Text(
+              nbPages > 1
+                ? 'RÉSULTATS PAR ANNÉE — Page ${p + 1} / $nbPages  (${pageYears.first} → ${pageYears.last})'
+                : 'RÉSULTATS PAR ANNÉE  (${pageYears.first} → ${pageYears.last})',
+              style: sTitle,
+            )),
+            pw.SizedBox(height: 8),
+            pw.Column(children: rows),
+            pw.Spacer(),
+            pw.Center(child: pw.Text(
+              'Simulation générée le $dateStr  ·  ${annees.length} années au total',
+              style: sSmall,
+            )),
+          ],
+        ),
+      ));
+    }
+
+    return pdf.save();
+  }
+
+  static pw.Widget _kpiCard(String label, String value, pw.Font fontBold, pw.Font font) =>
+    pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
+      pw.Text(label, style: pw.TextStyle(font: font, fontSize: 8, color: PdfColors.grey700)),
+      pw.SizedBox(height: 2),
+      pw.Text(value, style: pw.TextStyle(font: fontBold, fontSize: 11, color: PdfColors.blue900)),
+    ]);
 }

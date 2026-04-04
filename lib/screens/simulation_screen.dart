@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:math';
-import 'package:flutter/services.dart'; // Pour TextInputFormatter
-import 'package:fl_chart/fl_chart.dart'; // Pour graphiques
+import 'package:flutter/services.dart';
+import 'package:printing/printing.dart';
 import '../services/sheets_service.dart';
-import '../config/app_config.dart'; // Pour config Sheets
-import '../main.dart'; // Pour AppTheme
+import '../services/pdf_service.dart';
 
 final _euro = NumberFormat.currency(locale: 'fr_FR', symbol: '€', decimalDigits: 0);
 
@@ -35,18 +34,18 @@ class _SimulationScreenState extends State<SimulationScreen> {
   final _taxeFonciere = TextEditingController();
 
   // ── Emprunt ───────────────────────────────────────────────────────────────
-  final _nbAnnees = TextEditingController();
-  final _taux     = TextEditingController();
+  final _nbAnnees  = TextEditingController();
+  final _taux      = TextEditingController();
   final _dateDebut = TextEditingController();
-  final _assuranceCredit = TextEditingController();
 
   // ── Résultats Sheets ───────────────────────────────────────────────────────
-  double? _echeance;          // échéance mensuelle (D10)
-  Map<int, double> _interetsParAnnee = {}; // année → somme des intérêts
-  Map<int, double> _capitalParAnnee = {};  // année → somme des capitaux
-  List<int> _anneesDisponibles = [];       // liste des années (ordonnée)
-  int _anneeSelection = 1;   // année sélectionnée (sera mis à jour après calcul)
-  bool   _calculEnCours = false;
+  double? _echeance;                          // échéance mensuelle (D10)
+  bool _calculEnCours = false;
+
+  // ── Tableau résultats par année ────────────────────────────────────────────
+  List<int> _anneesTable  = [];   // 10 premières années (affichage)
+  List<int> _toutesAnnees = [];   // toutes les années (PDF)
+  Map<String, List<double>> _resultatsTable = {};
 
   double _parse(TextEditingController c) => double.tryParse(c.text.replaceAll(',', '.')) ?? 0;
 
@@ -63,84 +62,9 @@ class _SimulationScreenState extends State<SimulationScreen> {
 
   int    get _nbAnneesVal     => _parse(_nbAnnees).toInt();
   double get _tauxVal         => _parse(_taux);
-  double get _assuranceCreditVal => _parse(_assuranceCredit);
   int    get _amortissement   => (_nbAnneesVal * 12);
 
-  // Année relative depuis le début de l'emprunt (0 = première année civile)
-  int get _anneeRelative => _dateDebutEmprunt != null ? _anneeSelection - _dateDebutEmprunt!.year : 0;
-
-  // Nombre de mois de l'emprunt dans l'année sélectionnée (pour proratisation)
-  int get _nombreMoisActifsAnnee {
-    if (_dateDebutEmprunt == null) return 0;
-    final annee = _anneeSelection;
-    final debut = _dateDebutEmprunt!;
-    final int moisDebut = debut.month;
-    final int anneeDebut = debut.year;
-    // nombre total de mois de l'emprunt
-    final int totalMois = _amortissement;
-    // mois de fin (inclus) = moisDebut + totalMois - 1
-    int moisFin = moisDebut + totalMois - 1;
-    int anneeFin = anneeDebut + (moisFin ~/ 12);
-    moisFin = moisFin % 12;
-    if (moisFin == 0) {
-      moisFin = 12;
-      anneeFin--;
-    }
-    // Si l'année est avant le début ou après la fin, 0 mois
-    if (annee < anneeDebut || annee > anneeFin) return 0;
-    // Déterminer le premier mois dans cette année
-    int debutMoisDansAnnee = (annee == anneeDebut) ? moisDebut : 1;
-    // Déterminer le dernier mois dans cette année
-    int finMoisDansAnnee = (annee == anneeFin) ? moisFin : 12;
-    return finMoisDansAnnee - debutMoisDansAnnee + 1;
-  }
-
-  // Loyer annuel (proratisé selon nombre de mois d'emprunt dans l'année)
-  double get _loyerAnnuel => _totalLoyers * _nombreMoisActifsAnnee;
-
-  // Intérêts annuels (déjà calculés depuis Sheets, déjà proratisés)
-  double get _interetsAnnuel => _interetsAnnee();
-
-  // Résultat d'exploitation = Loyer annuel - Intérêts emprunt annuel
-  double get _resultatExploitation => _loyerAnnuel - _interetsAnnuel;
-
-  // Frais de première année uniquement (année civile de début, non proratisés)
-  double get _fraisBancairesAnnuel => _anneeRelative == 0 ? _fraisBancVal : 0;
-  double get _fraisNotaireAnnuel => _anneeRelative == 0 ? _fraisNotaire : 0;
-  double get _travauxAnnuel => _anneeRelative == 0 ? _travauxVal : 0;
-
-  // Assurance crédit annuelle (proratisée, sans inflation)
-  double get _assuranceCreditAnnuel => _assuranceCreditVal * (_nombreMoisActifsAnnee / 12);
-
-  // Assurance PNO avec inflation 2% par an et proratisation
-  double get _assurancePnoAnnuel {
-    double base = _parse(_assurancePno);
-    return base * pow(1.02, _anneeRelative) * (_nombreMoisActifsAnnee / 12);
-  }
-
-  // Taxe foncière avec inflation 2% par an et proratisation
-  double get _taxeFonciereAnnuel {
-    double base = _parse(_taxeFonciere);
-    return base * pow(1.02, _anneeRelative) * (_nombreMoisActifsAnnee / 12);
-  }
-
-  // Total des charges annuelles (hors intérêts)
-  double get _totalChargesAnnuel => _fraisBancairesAnnuel + _assuranceCreditAnnuel + _fraisNotaireAnnuel + _travauxAnnuel + _assurancePnoAnnuel + _taxeFonciereAnnuel;
-
-  // Résultat net annuel = Résultat d'exploitation - Total charges
-  double get _resultatNet => _resultatExploitation - _totalChargesAnnuel;
-
-  // Retourne les intérêts pour l'année sélectionnée (déjà calculés depuis Sheets)
-  double _interetsAnnee() {
-    return _interetsParAnnee[_anneeSelection] ?? 0;
-  }
-
-  // Retourne le capital remboursé pour l'année sélectionnée
-  double _capitalAnnee() {
-    return _capitalParAnnee[_anneeSelection] ?? 0;
-  }
-
-  // --- Getters pour cash-flow (après emprunt) ---
+  // --- Getters pour cash-flow ---
   double get _totalLoyers {
     double sum = 0;
     for (final c in _loyers) {
@@ -148,16 +72,6 @@ class _SimulationScreenState extends State<SimulationScreen> {
     }
     return sum;
   }
-
-  double get _totalChargesMensuelles {
-    final assurancePno = double.tryParse(_assurancePno.text.replaceAll(',', '.')) ?? 0;
-    final copro = double.tryParse(_copropriete.text.replaceAll(',', '.')) ?? 0;
-    final taxe = double.tryParse(_taxeFonciere.text.replaceAll(',', '.')) ?? 0;
-    final assuranceCredit = double.tryParse(_assuranceCredit.text.replaceAll(',', '.')) ?? 0;
-    return (assurancePno + copro + taxe + assuranceCredit) / 12;
-  }
-
-  double get _cashflow => _totalLoyers - _totalChargesMensuelles;
 
   // ── Méthodes ──────────────────────────────────────────────────────────────
   void _updateNbApparts(int nb) {
@@ -182,154 +96,190 @@ class _SimulationScreenState extends State<SimulationScreen> {
     setState(() {
       _calculEnCours = true;
       _echeance = null;
-      _interetsParAnnee = {};
-      _capitalParAnnee = {};
-      _anneesDisponibles = [];
+      _anneesTable = [];
+      _resultatsTable = {};
     });
 
     try {
       final sheets = SheetsService();
 
-      // 1) Écriture des loyers (J2-J10) et charges (J11-J13) dans l'onglet "Emprunt"
-      List<Future<bool>> writes = [];
-      debugPrint('=== Écriture Loyers dans Emprunt ===');
-      // Toujours écrire 9 cellules (J2 à J10) : valeurs saisies ou 0 si non renseigné
-      for (int i = 0; i < 9; i++) {
-        double val = (i < _loyers.length) ? _parse(_loyers[i]) : 0;
-        debugPrint('Loyer Appart ${i + 1}: $val → J${i + 2}');
-        writes.add(sheets.writeCell('Emprunt', 'J${i + 2}', val));
-      }
-      debugPrint('Charges:');
-      debugPrint('Assurance PNO: ${_parse(_assurancePno)} → J11');
-      writes.add(sheets.writeCell('Emprunt', 'J11', _parse(_assurancePno)));
-      debugPrint('Copropriété: ${_parse(_copropriete)} → J12');
-      writes.add(sheets.writeCell('Emprunt', 'J12', _parse(_copropriete)));
-      debugPrint('Taxe foncière: ${_parse(_taxeFonciere)} → J13');
-      writes.add(sheets.writeCell('Emprunt', 'J13', _parse(_taxeFonciere)));
-      debugPrint('Assurance crédit: ${_parse(_assuranceCredit)} → J14');
-      writes.add(sheets.writeCell('Emprunt', 'J14', _parse(_assuranceCredit)));
-
-      // 2) Écriture des paramètres emprunt dans l'onglet "Emprunt"
-      writes.addAll([
-        sheets.writeCell('Emprunt', 'C4', _prixVal),  // Prix d'achat seul
-        sheets.writeCell('Emprunt', 'C5', _travauxVal), // Travaux seul
-        sheets.writeCell('Emprunt', 'C6', _amortissement.toDouble()),
-        sheets.writeCell('Emprunt', 'C7', _nbAnneesVal.toDouble()),
-        sheets.writeCell('Emprunt', 'F3', _tauxVal / 100),
+      // 1) Écriture initiale en 4 writeRange parallèles
+      final List<List<dynamic>> loyerRows = [
+        ...List.generate(9, (i) => [(i < _loyers.length) ? _parse(_loyers[i]) : 0.0]),
+        [_parse(_assurancePno)], [_parse(_copropriete)], [_parse(_taxeFonciere)],
+      ];
+      await Future.wait([
+        sheets.writeRange('Emprunt', 'J2:J13', loyerRows),
+        sheets.writeRange('Emprunt', 'C2:C5', [[_prixVal], [_travauxVal], [0], [_fraisNotaire]]),
+        sheets.writeRange('Emprunt', 'F2:F6', [[_fraisBancVal], [0], [_tauxVal / 100], [_amortissement], [_nbAnneesVal]]),
         sheets.writeCell('Emprunt', 'B10', _dateDebut.text),
       ]);
 
-      final writeResults = await Future.wait(writes);
-      debugPrint('Résultats écriture loyers/charges: $writeResults');
-
-      // 3) Attendre le recalcul Sheets (réduit pour améliorer performance)
-      await Future.delayed(const Duration(milliseconds: 1000)); // 1 seconde au lieu de 2
+      // 3) Attendre le recalcul Sheets
+      await Future.delayed(const Duration(milliseconds: 500));
 
       // 4) Lire les résultats emprunt (D10 = échéance)
       final echeance = await sheets.readCell('Emprunt', 'D10');
       debugPrint('Lecture D10 (échéance): $echeance');
 
-      // 5) Lire tous les capitaux (colonne E) et intérêts (colonne F) pour regroupement par année
-      Map<int, double> interetsParAnnee = {};
-      Map<int, double> capitalParAnnee = {};
+      // 5) Parser la date de début et calculer les années + lire E10:F{n}
       List<int> anneesDisponibles = [];
+      DateTime? dateDebut;
       if (_amortissement > 0) {
-        debugPrint('Amortissement: $_amortissement mois');
-        debugPrint('Date début saisie: ${_dateDebut.text}');
-
-        // Parser la date de début au format "MM-AAAA" ou "MM/AAAA"
-        DateTime? dateDebut;
         try {
           String dateStr = _dateDebut.text.trim();
-          List<String> parts;
-          if (dateStr.contains('/')) {
-            parts = dateStr.split('/');
-          } else if (dateStr.contains('-')) {
-            parts = dateStr.split('-');
-          } else {
-            parts = [dateStr];
-          }
+          List<String> parts = dateStr.contains('/') ? dateStr.split('/') : dateStr.split('-');
           if (parts.length == 2) {
-            final mois = int.parse(parts[0]);
-            final annee = int.parse(parts[1]);
-            dateDebut = DateTime(annee, mois, 1);
-            debugPrint('Date début parsée: $dateDebut');
-          } else {
-            debugPrint('Format date non reconnu: $dateStr');
+            dateDebut = DateTime(int.parse(parts[1]), int.parse(parts[0]), 1);
+            _dateDebutEmprunt = dateDebut;
+            // Calculer directement les années depuis date début + amortissement
+            final Set<int> anneesSet = {};
+            for (int i = 0; i < _amortissement; i++) {
+              anneesSet.add(DateTime(dateDebut.year, dateDebut.month + i, 1).year);
+            }
+            anneesDisponibles = anneesSet.toList()..sort();
+            debugPrint('Années calculées: $anneesDisponibles');
           }
         } catch (e) {
           debugPrint('Erreur parsing date début: $e');
         }
 
-        if (dateDebut != null) {
-          _dateDebutEmprunt = dateDebut;
-          // Lire TOUTES les données capital/intérêts en UN SEUL appel via readRange
-          // Cela évite les quotas Google et réduit le temps de 100s à ~2-3s
-          final moisAConsulter = _amortissement.clamp(0, 360);
-          if (moisAConsulter == 0) {
-            debugPrint('Aucun mois à consulter');
-            return;
-          }
-
-          debugPrint('Lecture plage E10:F${9 + moisAConsulter} (${moisAConsulter} mois)');
-
-          // Lire la plage complète E10:F[dernière ligne]
-          final rangeData = await sheets.readRange('Emprunt', 'E10:F${9 + moisAConsulter}');
-          debugPrint('Données lues: ${rangeData.length} lignes');
-
-          if (rangeData.isEmpty) {
-            debugPrint('Aucune donnée reçue depuis Sheets');
-            return;
-          }
-
-          // Extraire les colonnes capital (E) et intérêts (F)
-          List<double> capitaux = [];
-          List<double> interets = [];
-
-          for (int i = 0; i < rangeData.length && i < moisAConsulter; i++) {
-            final row = rangeData[i];
-            if (row.length >= 2) {
-              final cap = double.tryParse(row[0]?.toString() ?? '');
-              final intt = double.tryParse(row[1]?.toString() ?? '');
-              capitaux.add(cap ?? 0);
-              interets.add(intt ?? 0);
-            } else {
-              capitaux.add(0);
-              interets.add(0);
-            }
-          }
-
-          debugPrint('Extraction: ${capitaux.length} capitaux, ${interets.length} intérêts');
-
-          // Regrouper par année
-          for (int i = 0; i < interets.length; i++) {
-            final dateMois = DateTime(dateDebut.year, dateDebut.month + i, 1);
-            final annee = dateMois.year;
-            if (interets[i] != null) {
-              interetsParAnnee[annee] = (interetsParAnnee[annee] ?? 0) + interets[i]!;
-            }
-            if (capitaux[i] != null) {
-              capitalParAnnee[annee] = (capitalParAnnee[annee] ?? 0) + capitaux[i]!;
-            }
-          }
-          anneesDisponibles = interetsParAnnee.keys.toList()..sort();
-          debugPrint('Années trouvées: $anneesDisponibles');
-          debugPrint('Intérêts par année: $interetsParAnnee');
-          debugPrint('Capital par année: $capitalParAnnee');
-        } else {
-          debugPrint('Date de début invalide ou manquante');
-        }
       }
 
       if (mounted) {
         setState(() {
           _echeance = echeance;
-          _interetsParAnnee = interetsParAnnee;
-          _capitalParAnnee = capitalParAnnee;
-          _anneesDisponibles = anneesDisponibles;
-          _anneeSelection = anneesDisponibles.isNotEmpty ? anneesDisponibles.first : 1;
-          _calculEnCours = false;
         });
+
+        // Écrire le tableau récapitulatif dans l'onglet Emprunt (disposition horizontale)
+        if (anneesDisponibles.isNotEmpty && _dateDebutEmprunt != null) {
+          final int nbAnsSheet   = anneesDisponibles.length;        // toutes les années → sheet
+          final int nbAns        = min(10, nbAnsSheet);              // 10 max → affichage
+          final String eCol      = _colLetter(nbAnsSheet + 1);       // dernière colonne sheet
+
+          // Helper : construit [label, val0, val1, ..., val(n-1)]
+          List<dynamic> row(String label, List<dynamic> vals) => [label, ...vals];
+
+          // Précalcul des listes (réutilisées dans writes ET tableData)
+          final loyerSans = List.generate(nbAnsSheet, (i) {
+            final m = _calculerMoisActifsAnnee(anneesDisponibles[i], _dateDebutEmprunt!, _amortissement);
+            return _totalLoyers * m;
+          });
+          final loyerAvec = List.generate(nbAnsSheet, (i) {
+            final annee = anneesDisponibles[i];
+            final m = _calculerMoisActifsAnnee(annee, _dateDebutEmprunt!, _amortissement);
+            return _totalLoyers * m * pow(1.03, (annee - _dateDebutEmprunt!.year) ~/ 6);
+          });
+
+          // ── Batch 1 (parallèle) ─────────────────────────────────────────────
+          await Future.wait([
+            sheets.writeRange('Emprunt', 'A314:${eCol}314', [row('Année', List.generate(nbAnsSheet, (i) => anneesDisponibles[i]))]),
+            sheets.writeRange('Emprunt', 'A315:A318', [
+              ['Intérêts par année'], ['Capital emprunt'], ['Échéance'], ['Capital remboursé'],
+            ]),
+            sheets.writeRange('Emprunt', 'A321:${eCol}321', [row('Loyer annuel sans augmentation', loyerSans)]),
+            sheets.writeRange('Emprunt', 'A322:${eCol}322', [row('Loyer annuel avec augmentation', loyerAvec)]),
+          ]);
+          await Future.delayed(const Duration(milliseconds: 250));
+
+          // ── Batch 2 (parallèle) ─────────────────────────────────────────────
+          await Future.wait([
+            sheets.writeCell('Emprunt', 'A323', 'Résultat d\'exploitation'),
+            sheets.writeRange('Emprunt', 'A324:${eCol}324', [row('Frais bancaire',
+              List.generate(nbAnsSheet, (i) => anneesDisponibles[i] - _dateDebutEmprunt!.year == 0 ? _fraisBancVal : 0.0))]),
+            sheets.writeRange('Emprunt', 'A325:${eCol}325', [row('Frais de notaire',
+              List.generate(nbAnsSheet, (i) => anneesDisponibles[i] - _dateDebutEmprunt!.year == 0 ? _fraisNotaire : 0.0))]),
+            sheets.writeRange('Emprunt', 'A326:${eCol}326', [row('Assurance PNO',
+              List.generate(nbAnsSheet, (i) {
+                final annee = anneesDisponibles[i];
+                final m = _calculerMoisActifsAnnee(annee, _dateDebutEmprunt!, _amortissement);
+                return _parse(_assurancePno) * pow(1.02, annee - _dateDebutEmprunt!.year) * (m / 12);
+              }))]),
+            sheets.writeRange('Emprunt', 'A327:${eCol}327', [row('Taxe Foncière',
+              List.generate(nbAnsSheet, (i) {
+                final annee = anneesDisponibles[i];
+                final m = _calculerMoisActifsAnnee(annee, _dateDebutEmprunt!, _amortissement);
+                return _parse(_taxeFonciere) * pow(1.02, annee - _dateDebutEmprunt!.year) * (m / 12);
+              }))]),
+            sheets.writeRange('Emprunt', 'A328:${eCol}328', [row('Travaux',
+              List.generate(nbAnsSheet, (i) => anneesDisponibles[i] - _dateDebutEmprunt!.year == 0 ? _travauxVal : 0.0))]),
+            sheets.writeRange('Emprunt', 'A329:A338', [
+              ['Résultat d\'exploitation net'],
+              ['Déficit Reportable (Imput. 1ère année)'],
+              ['Résultat Fiscal'],
+              ['Prélèvements Sociaux (17,2%)'],
+              ['Impôts (TMI 30%)'],
+              ['CAF (Hors travaux)'],
+              ['CAF Nette (CAF-Capital emprunt)'],
+              ['Taux de Rentabilité Brut'],
+              ['Taux de Rentabilité Nette'],
+              ['Impact capacité d\'emprunt'],
+            ]),
+          ]);
+
+          debugPrint('Tableau récapitulatif envoyé en 2 lots parallèles');
+
+          // Attendre que Sheets recalcule les formules
+          await Future.delayed(const Duration(milliseconds: 1000));
+
+          // Lire B315:{eCol}338 — toutes les années (pas seulement les 10 premières)
+          final readData = await sheets.readRange('Emprunt', 'B315:${eCol}338');
+          debugPrint('Données tableau résultats: ${readData.length} lignes, ${readData.isNotEmpty ? readData[0].length : 0} colonnes lues');
+
+          // Helper : extraire une ligne de readData (index 0 = ligne 315)
+          List<double> parseRow(int rowIdx) {
+            if (rowIdx >= readData.length) return List.filled(nbAnsSheet, 0.0);
+            final row = readData[rowIdx];
+            return List.generate(nbAnsSheet, (i) {
+              if (i >= row.length) return 0.0;
+              return double.tryParse(row[i]?.toString() ?? '') ?? 0.0;
+            });
+          }
+
+          // Indices dans readData (B315:K338): index = numéro de ligne - 315
+          final Map<String, List<double>> tableData = {
+            'interets'            : parseRow(0),   // ligne 315
+            'capitalEmprunt'      : parseRow(1),   // ligne 316
+            'echeance'            : parseRow(2),   // ligne 317
+            'capitalRembourse'    : parseRow(3),   // ligne 318
+            'loyer'               : loyerAvec.map((v) => v.toDouble()).toList(),
+            'resultatExploitation': parseRow(8),   // ligne 323
+            'fraisBancaire'       : List.generate(nbAnsSheet, (i) => anneesDisponibles[i] - _dateDebutEmprunt!.year == 0 ? _fraisBancVal : 0.0),
+            'fraisNotaire'        : List.generate(nbAnsSheet, (i) => anneesDisponibles[i] - _dateDebutEmprunt!.year == 0 ? _fraisNotaire : 0.0),
+            'assurancePno'        : List.generate(nbAnsSheet, (i) {
+              final annee = anneesDisponibles[i];
+              final m = _calculerMoisActifsAnnee(annee, _dateDebutEmprunt!, _amortissement);
+              return _parse(_assurancePno) * pow(1.02, annee - _dateDebutEmprunt!.year) * (m / 12);
+            }),
+            'taxeFonciere'        : List.generate(nbAnsSheet, (i) {
+              final annee = anneesDisponibles[i];
+              final m = _calculerMoisActifsAnnee(annee, _dateDebutEmprunt!, _amortissement);
+              return _parse(_taxeFonciere) * pow(1.02, annee - _dateDebutEmprunt!.year) * (m / 12);
+            }),
+            'travaux'             : List.generate(nbAnsSheet, (i) => anneesDisponibles[i] - _dateDebutEmprunt!.year == 0 ? _travauxVal : 0.0),
+            'resultatNet'         : parseRow(14),  // ligne 329
+            'deficitReportable'   : parseRow(15),  // ligne 330
+            'resultatFiscal'      : parseRow(16),  // ligne 331
+            'prelevementsSociaux' : parseRow(17),  // ligne 332
+            'impots'              : parseRow(18),  // ligne 333
+            'cafHorsTravaux'      : parseRow(19),  // ligne 334
+            'cafNette'            : parseRow(20),  // ligne 335
+            'tauxRentaBrut'       : parseRow(21),  // ligne 336
+            'tauxRentaNet'        : parseRow(22),  // ligne 337
+            'impactCapacite'      : parseRow(23),  // ligne 338
+          };
+
+          if (mounted) {
+            setState(() {
+              _anneesTable    = anneesDisponibles.take(nbAns).toList();
+              _toutesAnnees   = anneesDisponibles;
+              _resultatsTable = tableData;
+              _calculEnCours  = false;
+            });
+          }
+        } else {
+          if (mounted) setState(() { _calculEnCours = false; });
+        }
       }
     } catch (e, stack) {
       debugPrint('Erreur calcul complet: $e');
@@ -340,6 +290,71 @@ class _SimulationScreenState extends State<SimulationScreen> {
         });
       }
     }
+  }
+
+  Future<void> _exporterPdf() async {
+    if (_toutesAnnees.isEmpty || _resultatsTable.isEmpty) return;
+    try {
+      final bytes = await PdfService.genererSimulation(
+        prixAchat       : _prixVal,
+        honoraires      : _honorairesVal,
+        travaux         : _travauxVal,
+        fraisBancaires  : _fraisBancVal,
+        apport          : _apportVal,
+        fraisNotaire    : _fraisNotaire,
+        coutAcquisition : _coutAcquisition,
+        montantEmprunt  : _credit,
+        typeBien        : _typeBien,
+        nbApparts       : _nbApparts,
+        loyers          : _loyers.map(_parse).toList(),
+        assurancePno    : _parse(_assurancePno),
+        copropriete     : _parse(_copropriete),
+        taxeFonciere    : _parse(_taxeFonciere),
+        nbAnnees        : _nbAnneesVal,
+        taux            : _tauxVal,
+        dateDebut       : _dateDebut.text,
+        amortissement   : _amortissement,
+        echeance        : _echeance ?? 0,
+        annees          : _toutesAnnees,
+        resultats       : _resultatsTable,
+      );
+      await Printing.sharePdf(bytes: bytes, filename: 'Simulation_${DateTime.now().year}.pdf');
+    } catch (e) {
+      debugPrint('Erreur export PDF: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur PDF: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // Calcule le nombre de mois actifs pour une année donnée
+  int _calculerMoisActifsAnnee(int annee, DateTime dateDebut, int totalMois) {
+    final moisDebut = dateDebut.month;
+    final anneeDebut = dateDebut.year;
+    final int moisFin = moisDebut + totalMois - 1;
+    int anneeFin = anneeDebut + (moisFin ~/ 12);
+    int moisFinAjuste = moisFin % 12;
+    if (moisFinAjuste == 0) {
+      moisFinAjuste = 12;
+      anneeFin--;
+    }
+    if (annee < anneeDebut || annee > anneeFin) return 0;
+    int debutMoisDansAnnee = (annee == anneeDebut) ? moisDebut : 1;
+    int finMoisDansAnnee   = (annee == anneeFin)   ? moisFinAjuste : 12;
+    return finMoisDansAnnee - debutMoisDansAnnee + 1;
+  }
+
+  // Convertit un index de colonne (1=A, 2=B, 27=AA, …) en lettre Excel
+  String _colLetter(int col) {
+    String result = '';
+    while (col > 0) {
+      col--;
+      result = String.fromCharCode('A'.codeUnitAt(0) + (col % 26)) + result;
+      col ~/= 26;
+    }
+    return result;
   }
 
   @override
@@ -355,7 +370,6 @@ class _SimulationScreenState extends State<SimulationScreen> {
     _assurancePno.dispose();
     _copropriete.dispose();
     _taxeFonciere.dispose();
-    _assuranceCredit.dispose();
     // Emprunt
     _nbAnnees.dispose();
     _taux.dispose();
@@ -404,8 +418,8 @@ class _SimulationScreenState extends State<SimulationScreen> {
             if (_travauxVal > 0)        _Ligne('Travaux',                 _travauxVal),
             const Divider(height: 16),
             _Ligne('Coût total',          _total,  gras: true),
-            if (_apportVal > 0)          _Ligne('Apport',                  _apportVal),
-            if (_apportVal > 0)          _Ligne('Crédit nécessaire',       _credit, gras: true, couleur: const Color(0xFF0D47A1)),
+            if (_apportVal > 0)         _Ligne('Apport',                  _apportVal),
+            if (_apportVal > 0)         _Ligne('Crédit nécessaire',       _credit, gras: true, couleur: const Color(0xFF0D47A1)),
           ]),
         ),
         const SizedBox(height: 24),
@@ -446,8 +460,6 @@ class _SimulationScreenState extends State<SimulationScreen> {
             DateEmpruntInputFormatter(),
           ],
         ),
-        const SizedBox(height: 12),
-        _Champ(label: 'Assurance crédit (annuelle)', controller: _assuranceCredit, onChanged: (_) => setState(() {}), suffix: '€'),
         const SizedBox(height: 20),
 
         // ── Bouton calculer ────────────────────────────────────────────────────
@@ -469,301 +481,272 @@ class _SimulationScreenState extends State<SimulationScreen> {
         ),
         const SizedBox(height: 24),
 
-        // ── Résultats Emprunt ───────────────────────────────────────────────────
+        // ── Résultats ───────────────────────────────────────────────────────────
         if (_echeance != null) ...[
-          const Text('Résultats de la simulation', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 16),
-
-          // Navigation des années (flèches simples centrées)
-          if (_anneesDisponibles.length > 1)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Flèche gauche
-                IconButton(
-                  icon: const Icon(Icons.chevron_left),
-                  color: _anneeSelection > _anneesDisponibles.first
-                      ? Colors.green
-                      : Colors.grey.withOpacity(0.3), // plus visible même désactivée
-                  onPressed: _anneeSelection > _anneesDisponibles.first
-                      ? () {
-                          setState(() {
-                            _anneeSelection = _anneesDisponibles[_anneesDisponibles.indexOf(_anneeSelection) - 1];
-                          });
-                        }
-                      : null,
-                  iconSize: 32,
-                  padding: const EdgeInsets.all(12),
-                  constraints: const BoxConstraints(),
-                  tooltip: 'Année précédente',
-                ),
-                // Année sélectionnée (centrée)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
-                  ),
-                  child: Text(
-                    'Année $_anneeSelection',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.primary,
-                    ),
-                  ),
-                ),
-                // Flèche droite
-                IconButton(
-                  icon: const Icon(Icons.chevron_right),
-                  color: _anneeSelection < _anneesDisponibles.last
-                      ? Colors.green
-                      : Colors.grey.withOpacity(0.3), // plus visible même désactivée
-                  onPressed: _anneeSelection < _anneesDisponibles.last
-                      ? () {
-                          setState(() {
-                            _anneeSelection = _anneesDisponibles[_anneesDisponibles.indexOf(_anneeSelection) + 1];
-                          });
-                        }
-                      : null,
-                  iconSize: 32,
-                  padding: const EdgeInsets.all(12),
-                  constraints: const BoxConstraints(),
-                  tooltip: 'Année suivante',
-                ),
-              ],
-            ),
-          const SizedBox(height: 16),
-
+          // Échéance mensuelle card
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.grey[50],
+              color: const Color(0xFF1565C0).withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[200]!),
+              border: Border.all(color: const Color(0xFF1565C0).withValues(alpha: 0.2)),
             ),
-            child: Column(children: [
-              _Ligne('💸 Intérêts annuels', _interetsAnnee(),
-                  couleur: const Color(0xFFEF5350)),
-              _Ligne('📈 Capital remboursé', _capitalAnnee(),
-                  couleur: const Color(0xFF4CAF50)),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1565C0).withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: const Color(0xFF1565C0).withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Row(children: [
-                  Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '🏦 Échéance mensuelle',
-                            style: TextStyle(
-                              color: const Color(0xFF1565C0),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const Text(
-                            'Constante sur toute la durée',
-                            style: TextStyle(
-                              color: Colors.grey,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ]),
-                  ),
-                  Text(
-                    _euro.format(_echeance ?? 0),
-                    style: const TextStyle(
-                      color: const Color(0xFF1565C0),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text(
+                    'Échéance mensuelle',
+                    style: TextStyle(
+                      color: Color(0xFF1565C0),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                     ),
+                  ),
+                  const Text(
+                    'Constante sur toute la durée',
+                    style: TextStyle(color: Colors.grey, fontSize: 10),
                   ),
                 ]),
               ),
-            ]),
-          ),
-          const SizedBox(height: 24),
-
-          // ── Loyer annuel ───────────────────────────────────────────────────────
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[200]!),
-            ),
-            child: _LigneCalculee(
-              label: '🏠 Loyer annuel',
-              valeur: _loyerAnnuel,
-              actif: true,
-              suffix: '€',
-              couleur: const Color(0xFF4CAF50),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // ── Résultat d'exploitation annuel ─────────────────────────────────────
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[200]!),
-            ),
-            child: _Ligne('Résultat d\'exploitation', _resultatExploitation, gras: true, couleur: const Color(0xFF4CAF50)),
-          ),
-          const SizedBox(height: 16),
-
-          // ── Charges annuelles détaillées ───────────────────────────────────────
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[200]!),
-            ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Charges annuelles', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 12),
-              if (_fraisBancairesAnnuel > 0)
-                _Ligne('Frais bancaires', _fraisBancairesAnnuel),
-              _Ligne('Assurance crédit', _assuranceCreditAnnuel),
-              if (_fraisNotaireAnnuel > 0)
-                _Ligne('Frais de notaire', _fraisNotaireAnnuel),
-              if (_travauxAnnuel > 0)
-                _Ligne('Travaux', _travauxAnnuel),
-              _Ligne('Assurance PNO', _assurancePnoAnnuel),
-              _Ligne('Taxe foncière', _taxeFonciereAnnuel),
-              const Divider(height: 16),
-              _Ligne('Total charges', _totalChargesAnnuel, gras: true, couleur: const Color(0xFFEF5350)),
-            ]),
-          ),
-          const SizedBox(height: 16),
-
-          // ── Résultat net annuel ─────────────────────────────────────────────────
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Résultat net annuel', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text('Année $_anneeSelection', style: const TextStyle(color: Colors.white54, fontSize: 11)),
-              ])),
               Text(
-                _euro.format(_resultatNet),
-                style: TextStyle(
-                  color: _resultatNet >= 0 ? const Color(0xFF4CAF50) : const Color(0xFFEF5350),
-                  fontSize: 20,
+                _euro.format(_echeance ?? 0),
+                style: const TextStyle(
+                  color: Color(0xFF1565C0),
+                  fontSize: 16,
                   fontWeight: FontWeight.w700,
                 ),
               ),
             ]),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
+        ],
 
-          // ── Cash Flow Annuel et Déficit Foncier ──────────────────────────────
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[200]!),
-            ),
-            child: Column(children: [
-              _LigneCalculee(
-                label: '💰 Cash Flow Annuel',
-                valeur: _resultatNet - _capitalAnnee(),
-                actif: true,
-                suffix: '€',
-                couleur: const Color(0xFF4CAF50),
-              ),
-              const SizedBox(height: 12),
-              _LigneCalculee(
-                label: '🏛️ Déficit Foncier (35%)',
-                valeur: _resultatNet * 0.35,
-                actif: true,
-                suffix: '€',
-                couleur: const Color(0xFFEF5350),
-              ),
-            ]),
+        // Tableau résultats par année
+        if (_anneesTable.isNotEmpty && _resultatsTable.isNotEmpty) ...[
+          const Text('Résultats du simulation', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 16),
+          _TableauSimulation(
+            annees: _anneesTable,
+            resultats: _resultatsTable,
           ),
           const SizedBox(height: 16),
-
-          // ── Taux de Rentabilité ───────────────────────────────────────────────
-          Container(
+          SizedBox(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[200]!),
+            child: ElevatedButton.icon(
+              onPressed: _exporterPdf,
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              label: const Text('Exporter la simulation en PDF'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
-            child: Column(children: [
-              _LigneCalculee(
-                label: '💵 Cash Flow par mois',
-                valeur: (_resultatNet - _capitalAnnee()) / 12,
-                actif: true,
-                suffix: '€',
-                couleur: const Color(0xFF4CAF50),
-              ),
-              const SizedBox(height: 8),
-              _LigneCalculee(
-                label: '📈 Taux de Rentabilité Brut',
-                valeur: (_loyerAnnuel / _credit) * 100,
-                actif: _credit > 0,
-                suffix: '%',
-                couleur: const Color(0xFF1565C0),
-              ),
-              const SizedBox(height: 8),
-              _LigneCalculee(
-                label: '📉 Taux de Rentabilité Net',
-                valeur: ((_resultatNet - _capitalAnnee()) / _credit) * 100,
-                actif: _credit > 0,
-                suffix: '%',
-                couleur: const Color(0xFF4CAF50),
-              ),
-            ]),
           ),
           const SizedBox(height: 32),
-
-          // ── Graphique Cash Flow Annuel ───────────────────────────────────────
-          if (_interetsParAnnee.isNotEmpty && _dateDebutEmprunt != null)
-            _CashFlowChart(
-              interetsParAnnee: _interetsParAnnee,
-              capitalParAnnee: _capitalParAnnee,
-              anneeDebut: _dateDebutEmprunt!.year,
-              dureeAnnees: _amortissement,
-              loyerAnnuel: _loyerAnnuel,
-              totalChargesAnnuel: _totalChargesAnnuel,
-              nbAnneesTotal: _nbAnneesVal,
-            ),
         ],
       ]),
     );
   }
 
   bool get _peutCalculer => _prixVal > 0 && _nbAnneesVal > 0 && _tauxVal > 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TABLEAU SIMULATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _TableauSimulation extends StatelessWidget {
+  final List<int> annees;
+  final Map<String, List<double>> resultats;
+
+  const _TableauSimulation({required this.annees, required this.resultats});
+
+  static const _metriques = [
+    ('Intérêts par année',             'interets', false),         // 0
+    ('Capital emprunt',                'capitalEmprunt', false),   // 1
+    ('Échéance',                       'echeance', false),         // 2
+    ('Capital remboursé',              'capitalRembourse', false), // 3
+    // separator at index 4
+    ('Loyer annuel avec augmentation', 'loyer', false),            // 4
+    ('Résultat d\'exploitation',       'resultatExploitation', false), // 5
+    ('Frais bancaire',                 'fraisBancaire', false),    // 6
+    ('Frais de notaire',               'fraisNotaire', false),     // 7
+    ('Assurance PNO',                  'assurancePno', false),     // 8
+    ('Taxe Foncière',                  'taxeFonciere', false),     // 9
+    ('Travaux',                        'travaux', false),          // 10
+    // separator at index 11
+    ('Résultat net',                   'resultatNet', false),      // 11
+    ('Déficit Reportable',             'deficitReportable', false),
+    ('Résultat Fiscal',                'resultatFiscal', false),
+    ('Prél. Sociaux (17,2%)',          'prelevementsSociaux', false),
+    ('Impôts (TMI 30%)',               'impots', false),
+    ('CAF (Hors travaux)',             'cafHorsTravaux', false),
+    ('CAF Nette',                      'cafNette', false),
+    ('Taux Renta Brut',                'tauxRentaBrut', true),
+    ('Taux Renta Net',                 'tauxRentaNet', true),
+    ('Impact capacité emprunt',        'impactCapacite', false),
+  ];
+
+  static const _financialKeys = {
+    'resultatExploitation',
+    'resultatNet',
+    'resultatFiscal',
+    'cafHorsTravaux',
+    'cafNette',
+  };
+
+  static const _chargeKeys = {
+    'fraisBancaire',
+    'fraisNotaire',
+    'assurancePno',
+    'taxeFonciere',
+    'travaux',
+  };
+
+  static const _tauxKeys = {
+    'tauxRentaBrut',
+    'tauxRentaNet',
+  };
+
+  Color _valueColor(String key, double value) {
+    if (_financialKeys.contains(key)) {
+      return value >= 0 ? const Color(0xFF2E7D32) : const Color(0xFFEF5350);
+    }
+    if (_chargeKeys.contains(key)) return Colors.grey[600]!;
+    if (_tauxKeys.contains(key))   return const Color(0xFF1565C0);
+    if (key == 'loyer')            return const Color(0xFF1565C0);
+    return Colors.grey[800]!;
+  }
+
+  String _format(String key, bool isPercent, double value) {
+    if (isPercent) return '${(value * 100).toStringAsFixed(2)}%';
+    return _euro.format(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const double labelWidth = 160;
+    const double colWidth   = 88;
+    const double rowHeight  = 36;
+    const double headerH    = 36;
+
+    // Build data rows
+    List<Widget> labelRows = [];
+
+    // header label cell
+    labelRows.add(Container(
+      height: headerH,
+      width: labelWidth,
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      color: const Color(0xFFE3F2FD),
+      child: const Text('Métrique', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF1565C0))),
+    ));
+
+    // data header cells are handled by headerYearCols above
+
+    for (int rowIdx = 0; rowIdx < _metriques.length; rowIdx++) {
+      final (label, key, isPercent) = _metriques[rowIdx];
+      final isEven = rowIdx % 2 == 0;
+      final bg = isEven ? Colors.white : Colors.grey[50]!;
+
+      // Séparateurs : entre capital remboursé (3) et loyer (4), entre travaux (10) et résultat net (11)
+      if (rowIdx == 4 || rowIdx == 11) {
+        labelRows.add(Container(height: 2, width: labelWidth, color: Colors.grey[300]));
+      }
+
+      labelRows.add(Container(
+        height: rowHeight,
+        width: labelWidth,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        color: bg,
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: Colors.black87),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ));
+    }
+
+    // Build column widgets for each year
+    List<Widget> yearColumnWidgets = List.generate(annees.length, (ci) {
+      List<Widget> cells = [];
+
+      // header cell
+      cells.add(Container(
+        height: headerH,
+        width: colWidth,
+        alignment: Alignment.center,
+        color: const Color(0xFFE3F2FD),
+        child: Text(
+          '${annees[ci]}',
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF1565C0)),
+        ),
+      ));
+
+      for (int rowIdx = 0; rowIdx < _metriques.length; rowIdx++) {
+        final (_, key, isPercent) = _metriques[rowIdx];
+        final isEven = rowIdx % 2 == 0;
+        final bg     = isEven ? Colors.white : Colors.grey[50]!;
+        final vals   = resultats[key] ?? [];
+        final value  = ci < vals.length ? vals[ci] : 0.0;
+        final color  = _valueColor(key, value);
+
+        if (rowIdx == 4 || rowIdx == 11) {
+          cells.add(Container(height: 2, width: colWidth, color: Colors.grey[300]));
+        }
+
+        cells.add(Container(
+          height: rowHeight,
+          width: colWidth,
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 8),
+          color: bg,
+          child: Text(
+            _format(key, isPercent, value),
+            style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ));
+      }
+
+      return Column(children: cells);
+    });
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey[300]!),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Sticky left column (labels)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: labelRows,
+            ),
+            // Scrollable year columns
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: yearColumnWidgets,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -909,11 +892,6 @@ class _RecettesChargesSection extends StatelessWidget {
     required this.onNbAppartsChanged,
   });
 
-  double _parse(TextEditingController c) => double.tryParse(c.text.replaceAll(',', '.')) ?? 0;
-  double get _totalLoyers => loyers.fold(0, (s, c) => s + _parse(c));
-  double get _totalCharges => (_parse(assurancePno) + _parse(copropriete) + _parse(taxeFonciere)) / 12;
-  double get _cashflow => _totalLoyers - _totalCharges;
-
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1020,184 +998,3 @@ class DateEmpruntInputFormatter extends TextInputFormatter {
     );
   }
 }
-
-// ── Graphique Cash Flow Annuel ───────────────────────────────────────────────────
-class _CashFlowChart extends StatelessWidget {
-  final Map<int, double> interetsParAnnee;
-  final Map<int, double> capitalParAnnee;
-  final int anneeDebut;
-  final int dureeAnnees;
-  final double loyerAnnuel;
-  final double totalChargesAnnuel; // Charges fixes annuelles (hors intérêts)
-  final int nbAnneesTotal;
-
-  const _CashFlowChart({
-    required this.interetsParAnnee,
-    required this.capitalParAnnee,
-    required this.anneeDebut,
-    required this.dureeAnnees,
-    required this.loyerAnnuel,
-    required this.totalChargesAnnuel,
-    required this.nbAnneesTotal,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (interetsParAnnee.isEmpty) return const SizedBox.shrink();
-
-    // Préparer les données : années X, cash-flow Y
-    final annees = <int>[];
-    final cashFlows = <double>[];
-
-    // Période complète de l'emprunt (années civiles)
-    for (int annee = anneeDebut + 1; annee <= anneeDebut + nbAnneesTotal; annee++) {
-      annees.add(annee);
-      final interets = interetsParAnnee[annee] ?? 0;
-      final capital = capitalParAnnee[annee] ?? 0;
-      // Cash-flow annuel = Loyer annuel - Intérêts - Charges - Capital
-      final cashFlow = loyerAnnuel - interets - totalChargesAnnuel - capital;
-      cashFlows.add(cashFlow);
-    }
-
-    if (cashFlows.isEmpty) return const SizedBox.shrink();
-
-    final maxVal = cashFlows.map((e) => e.abs()).reduce((a, b) => a > b ? a : b);
-    final maxY = maxVal * 1.2;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text(
-          '📈 Évolution du Cash Flow Annuel',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 200,
-          child: LineChart(
-            LineChartData(
-              gridData: FlGridData(
-                show: true,
-                drawVerticalLine: true,
-                horizontalInterval: maxY / 4,
-                verticalInterval: 1,
-                getDrawingHorizontalLine: (value) => FlLine(
-                  color: Colors.grey[300]!,
-                  strokeWidth: 1,
-                ),
-                getDrawingVerticalLine: (value) => FlLine(
-                  color: Colors.grey[300]!,
-                  strokeWidth: 1,
-                ),
-              ),
-              titlesData: FlTitlesData(
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    interval: 1,
-                    getTitlesWidget: (value, meta) {
-                      final index = value.toInt();
-                      if (index >= 0 && index < annees.length) {
-                        return Text(
-                          annees[index].toString(),
-                          style: const TextStyle(fontSize: 10, color: Colors.grey),
-                        );
-                      }
-                      return const SizedBox.shrink();
-                    },
-                  ),
-                ),
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    interval: maxY / 4,
-                    getTitlesWidget: (value, meta) {
-                      return Text(
-                        '${_euro.format(value)}',
-                        style: const TextStyle(fontSize: 10, color: Colors.grey),
-                      );
-                    },
-                  ),
-                ),
-                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              ),
-              borderData: FlBorderData(show: true, border: Border.all(color: Colors.grey[300]!)),
-              minX: 0,
-              maxX: (annees.length - 1).toDouble(),
-              minY: -maxY,
-              maxY: maxY,
-              lineBarsData: [
-                LineChartBarData(
-                  spots: List.generate(cashFlows.length, (i) => FlSpot(i.toDouble(), cashFlows[i])),
-                  isCurved: true,
-                  color: const Color(0xFF4CAF50),
-                  barWidth: 3,
-                  belowBarData: BarAreaData(show: false),
-                  dotData: FlDotData(show: true),
-                ),
-              ],
-              extraLinesData: ExtraLinesData(
-                horizontalLines: [
-                  HorizontalLine(
-                    y: 0,
-                    color: Colors.grey[400]!,
-                    strokeWidth: 1.5,
-                    dashArray: [5, 5],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 40,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: annees.asMap().entries.map((entry) {
-              final cashFlow = cashFlows[entry.key];
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Column(
-                  children: [
-                    Text(
-                      '${_euro.format(cashFlow)}',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: cashFlow >= 0 ? const Color(0xFF4CAF50) : const Color(0xFFEF5350),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF4CAF50),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    Text(
-                      '${annees[entry.key]}',
-                      style: const TextStyle(fontSize: 9, color: Colors.grey),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ],
-    ),
-    );
-  }
-}
-
-// ── Widget cash-flow après emprunt ─────────────────────────────────────────────

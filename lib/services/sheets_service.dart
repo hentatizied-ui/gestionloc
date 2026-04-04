@@ -191,6 +191,34 @@ class SheetsService extends ChangeNotifier {
     }
   }
 
+  /// Écrit une plage de cellules en un seul appel (ex: A314:K314 avec [[val1,val2,...]])
+  Future<bool> writeRange(String sheetName, String rangeA1, List<List<dynamic>> values) async {
+    try {
+      final url = Uri.parse(
+        '${AppConfig.sheetsProxyUrl}?action=writeRange'
+        '&sheet=${Uri.encodeComponent(sheetName)}'
+        '&range=${Uri.encodeComponent(rangeA1)}'
+        '&values=${Uri.encodeComponent(jsonEncode(values))}',
+      );
+      debugPrint('📡 writeRange: $sheetName!$rangeA1');
+      final response = await http.get(url).timeout(AppConfig.httpTimeout);
+      if (response.statusCode != 200) {
+        debugPrint('❌ writeRange HTTP ${response.statusCode}: ${response.body}');
+        return false;
+      }
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data['success'] != true) {
+        debugPrint('❌ writeRange API error: ${data['error']}');
+        return false;
+      }
+      debugPrint('✅ writeRange: $sheetName!$rangeA1');
+      return true;
+    } catch (e) {
+      debugPrint('❌ writeRange exception ($sheetName!$rangeA1): $e');
+      return false;
+    }
+  }
+
   // ── Supprimer une ligne ─────────────────────────────────────────────────
 
   Future<bool> deleteRow(String sheetName, String id) async {
