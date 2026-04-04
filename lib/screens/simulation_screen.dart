@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 import '../services/sheets_service.dart';
 import '../services/pdf_service.dart';
+import '../services/simulation_save_service.dart';
 
 final _euro = NumberFormat.currency(locale: 'fr_FR', symbol: '€', decimalDigits: 0);
 
@@ -292,6 +293,116 @@ class _SimulationScreenState extends State<SimulationScreen> {
     }
   }
 
+  // Formate un double en string sans décimales inutiles
+  String _fmtNum(dynamic v) {
+    final d = (v as num).toDouble();
+    return d == d.truncateToDouble() ? d.toInt().toString() : d.toString();
+  }
+
+  Future<void> _sauvegarderSimulation() async {
+    if (_toutesAnnees.isEmpty || _resultatsTable.isEmpty) return;
+
+    final nomCtrl = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Sauvegarder la simulation'),
+        content: TextField(
+          controller: nomCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Nom de la simulation',
+            hintText: 'Ex: Appart Lyon Centre',
+          ),
+          onSubmitted: (_) => Navigator.pop(ctx, true),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sauvegarder')),
+        ],
+      ),
+    );
+
+    if (confirmed != true || nomCtrl.text.trim().isEmpty) return;
+
+    try {
+      await SimulationSaveService.sauvegarder(
+        nom: nomCtrl.text.trim(),
+        params: {
+          'prixAchat': _prixVal, 'honoraires': _honorairesVal,
+          'travaux': _travauxVal, 'fraisBancaires': _fraisBancVal,
+          'apport': _apportVal, 'typeBien': _typeBien,
+          'nbApparts': _nbApparts,
+          'loyers': _loyers.map(_parse).toList(),
+          'assurancePno': _parse(_assurancePno), 'copropriete': _parse(_copropriete),
+          'taxeFonciere': _parse(_taxeFonciere), 'nbAnnees': _nbAnneesVal,
+          'taux': _tauxVal, 'dateDebut': _dateDebut.text,
+        },
+        echeance:  _echeance ?? 0,
+        annees:    _toutesAnnees,
+        resultats: _resultatsTable,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Simulation sauvegardée (local + Drive)'),
+          backgroundColor: Color(0xFF2E7D32),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _ouvrirMesSimulations() async {
+    final sims = await SimulationSaveService.lister();
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => _MesSimulationsSheet(
+        simulations: sims,
+        onCharger: (sim) { Navigator.pop(ctx); _chargerSimulation(sim); },
+        onSupprimer: SimulationSaveService.supprimer,
+        onSync: SimulationSaveService.syncFromDrive,
+      ),
+    );
+  }
+
+  void _chargerSimulation(SimulationComplete sim) {
+    final p = sim.params;
+    final nb = (p['nbApparts'] as num).toInt();
+    _updateNbApparts(nb);
+    final loys = (p['loyers'] as List).map((e) => (e as num).toDouble()).toList();
+    setState(() {
+      _prixAchat.text      = _fmtNum(p['prixAchat']);
+      _honoraires.text     = _fmtNum(p['honoraires']);
+      _travaux.text        = _fmtNum(p['travaux']);
+      _fraisBancaires.text = _fmtNum(p['fraisBancaires']);
+      _apport.text         = _fmtNum(p['apport']);
+      _typeBien            = p['typeBien'] as String;
+      for (int i = 0; i < _loyers.length && i < loys.length; i++) {
+        _loyers[i].text = _fmtNum(loys[i]);
+      }
+      _assurancePno.text   = _fmtNum(p['assurancePno']);
+      _copropriete.text    = _fmtNum(p['copropriete']);
+      _taxeFonciere.text   = _fmtNum(p['taxeFonciere']);
+      _nbAnnees.text       = (p['nbAnnees'] as num).toInt().toString();
+      _taux.text           = _fmtNum(p['taux']);
+      _dateDebut.text      = p['dateDebut'] as String;
+      _echeance            = sim.echeance;
+      _toutesAnnees        = sim.annees;
+      _anneesTable         = sim.annees.take(10).toList();
+      _resultatsTable      = sim.resultats;
+    });
+  }
+
   Future<void> _exporterPdf() async {
     if (_toutesAnnees.isEmpty || _resultatsTable.isEmpty) return;
     try {
@@ -462,6 +573,21 @@ class _SimulationScreenState extends State<SimulationScreen> {
         ),
         const SizedBox(height: 20),
 
+        // ── Bouton Mes simulations ─────────────────────────────────────────────
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _ouvrirMesSimulations,
+            icon: const Icon(Icons.history),
+            label: const Text('Mes simulations sauvegardées'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+
         // ── Bouton calculer ────────────────────────────────────────────────────
         SizedBox(
           width: double.infinity,
@@ -531,20 +657,33 @@ class _SimulationScreenState extends State<SimulationScreen> {
             resultats: _resultatsTable,
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _exporterPdf,
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              label: const Text('Exporter la simulation en PDF'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _sauvegarderSimulation,
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('Sauvegarder'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
             ),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _exporterPdf,
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                label: const Text('Exporter en PDF'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E7D32),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ]),
           const SizedBox(height: 32),
         ],
       ]),
@@ -995,6 +1134,139 @@ class DateEmpruntInputFormatter extends TextInputFormatter {
     return TextEditingValue(
       text: formatted,
       selection: TextSelection.collapsed(offset: cursorPos),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MES SIMULATIONS (bottom sheet)
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _MesSimulationsSheet extends StatefulWidget {
+  final List<SimulationComplete> simulations;
+  final void Function(SimulationComplete) onCharger;
+  final Future<void> Function(String) onSupprimer;
+  final Future<List<SimulationComplete>> Function() onSync;
+
+  const _MesSimulationsSheet({
+    required this.simulations,
+    required this.onCharger,
+    required this.onSupprimer,
+    required this.onSync,
+  });
+
+  @override
+  State<_MesSimulationsSheet> createState() => _MesSimulationsSheetState();
+}
+
+class _MesSimulationsSheetState extends State<_MesSimulationsSheet> {
+  late List<SimulationComplete> _sims;
+  bool _syncing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _sims = widget.simulations;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dateFmt = DateFormat('dd/MM/yyyy HH:mm', 'fr_FR');
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.55,
+      maxChildSize: 0.9,
+      minChildSize: 0.3,
+      expand: false,
+      builder: (ctx, scrollCtrl) => Column(children: [
+        // Poignée
+        Container(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          width: 40, height: 4,
+          decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(2)),
+        ),
+
+        // Titre
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Row(children: [
+            const Icon(Icons.history, color: Color(0xFF1565C0)),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text('Mes simulations', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
+            Text('${_sims.length}', style: const TextStyle(color: Colors.grey)),
+          ]),
+        ),
+        const Divider(height: 1),
+
+        // Liste
+        Expanded(
+          child: _sims.isEmpty
+            ? const Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.inbox_outlined, size: 48, color: Colors.grey),
+                  SizedBox(height: 8),
+                  Text('Aucune simulation sauvegardée', style: TextStyle(color: Colors.grey)),
+                  SizedBox(height: 4),
+                  Text('Utilisez "Récupérer depuis Drive" pour restaurer', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                ]),
+              )
+            : ListView.separated(
+                controller: scrollCtrl,
+                itemCount: _sims.length,
+                separatorBuilder: (_, __) => const Divider(height: 1, indent: 56),
+                itemBuilder: (ctx, i) {
+                  final s = _sims[i];
+                  return ListTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0xFFE3F2FD),
+                      child: Icon(Icons.home_work_outlined, color: Color(0xFF1565C0), size: 20),
+                    ),
+                    title: Text(s.nom, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text(
+                      '${dateFmt.format(s.date)}  ·  ${s.annees.length} ans',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      onPressed: () async {
+                        await widget.onSupprimer(s.id);
+                        setState(() => _sims.removeWhere((x) => x.id == s.id));
+                      },
+                    ),
+                    onTap: () => widget.onCharger(s),
+                  );
+                },
+              ),
+        ),
+
+        // Bouton sync Drive
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _syncing ? null : () async {
+                setState(() => _syncing = true);
+                final news = await widget.onSync();
+                final updated = await SimulationSaveService.lister();
+                if (!mounted) return;
+                setState(() { _sims = updated; _syncing = false; });
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(news.isEmpty
+                    ? 'Déjà à jour'
+                    : '${news.length} simulation(s) récupérée(s) depuis Drive'),
+                ));
+              },
+              icon: _syncing
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.cloud_download_outlined),
+              label: Text(_syncing ? 'Synchronisation...' : 'Récupérer depuis Drive'),
+            ),
+          ),
+        ),
+      ]),
     );
   }
 }

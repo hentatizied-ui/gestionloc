@@ -221,6 +221,30 @@ class SheetsService extends ChangeNotifier {
 
   // ── Supprimer une ligne ─────────────────────────────────────────────────
 
+  // ── POST JSON (pour payloads larges) ───────────────────────────────────
+
+  Future<Map<String, dynamic>?> postJson(Map<String, dynamic> body) async {
+    try {
+      final url = Uri.parse(AppConfig.sheetsProxyUrl);
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'text/plain'},
+        body: jsonEncode(body),
+      ).timeout(AppConfig.httpTimeout);
+
+      if (response.statusCode != 200) {
+        debugPrint('postJson HTTP error ${response.statusCode}: ${response.body}');
+        return null;
+      }
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('postJson error: $e');
+      return null;
+    }
+  }
+
+  // ── Supprimer une ligne ─────────────────────────────────────────────────
+
   Future<bool> deleteRow(String sheetName, String id) async {
     try {
       final url = Uri.parse('${AppConfig.sheetsProxyUrl}?action=delete&sheet=${Uri.encodeComponent(sheetName)}&id=${Uri.encodeComponent(id)}');
