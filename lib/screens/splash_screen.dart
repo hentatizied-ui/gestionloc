@@ -92,7 +92,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 const SizedBox(height: 24),
                 const Text('Bienvenue !', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
-                Text('Entrez votre nom pour commencer.', style: TextStyle(fontSize: 15, color: Colors.grey[600], height: 1.5)),
+                Text('Entrez votre nom pour commencer.', style: TextStyle(fontSize: 15, color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.5)),
                 const Spacer(),
                 TextFormField(
                   controller: _prenom,

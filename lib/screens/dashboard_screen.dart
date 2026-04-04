@@ -35,7 +35,7 @@ class DashboardScreen extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 data.error!,
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
+                style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -120,7 +120,7 @@ class _KpiGrid extends StatelessWidget {
           label: 'Occupation',
           value: '${data.biensLoues} / ${data.biens.length}',
           sub: '${(data.tauxOccupation * 100).toStringAsFixed(0)}% du parc',
-          subColor: Colors.grey[600]!,
+          subColor: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
         _KpiCard(
           icon: Icons.pending_actions,
@@ -128,15 +128,15 @@ class _KpiGrid extends StatelessWidget {
           label: 'À encaisser',
           value: _euro.format(montantAEncaisser),
           sub: '${nonPayesMois.length} loyer(s) en attente',
-          subColor: nonPayesMois.isNotEmpty ? AppTheme.warning : Colors.grey[600]!,
+          subColor: nonPayesMois.isNotEmpty ? AppTheme.warning : Theme.of(context).colorScheme.onSurfaceVariant,
         ),
         _KpiCard(
           icon: Icons.event_busy,
-          iconColor: bailsExpirants > 0 ? AppTheme.danger : Colors.grey[600]!,
+          iconColor: bailsExpirants > 0 ? AppTheme.danger : Theme.of(context).colorScheme.onSurfaceVariant,
           label: 'Bails expirants',
           value: '$bailsExpirants bail(s)',
           sub: bailsExpirants > 0 ? 'Dans moins de 3 mois' : 'Aucun à venir',
-          subColor: bailsExpirants > 0 ? AppTheme.danger : Colors.grey[600]!,
+          subColor: bailsExpirants > 0 ? AppTheme.danger : Theme.of(context).colorScheme.onSurfaceVariant,
         ),
       ],
     );
@@ -153,12 +153,12 @@ class _KpiCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(12)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
         Row(children: [
           Icon(icon, size: 14, color: iconColor),
           const SizedBox(width: 5),
-          Expanded(child: Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[600]), overflow: TextOverflow.ellipsis)),
+          Expanded(child: Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant), overflow: TextOverflow.ellipsis)),
         ]),
         const SizedBox(height: 6),
         Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
@@ -217,7 +217,7 @@ class _AlertesBails extends StatelessWidget {
                   Text(l.nomComplet, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                   Text(
                     '${bien?.nom ?? "Bien inconnu"} — expire le ${_dateF.format(l.finBail)}',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                    style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 ])),
                 Container(
@@ -266,7 +266,7 @@ class _LoyersMoisCard extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
             Text(
               '${locatairesActifs.where((l) { final loyers = data.getLoyers(l.bienId!); return loyers.any((t) => t.date.year == now.year && t.date.month == now.month); }).length}/${locatairesActifs.length} encaissés',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ]),
           const SizedBox(height: 12),
@@ -293,11 +293,11 @@ class _LoyersMoisCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   child: Row(children: [
                     Icon(paye ? Icons.check_circle : Icons.radio_button_unchecked,
-                        size: 16, color: paye ? AppTheme.primary : Colors.grey[400]),
+                        size: 16, color: paye ? AppTheme.primary : Theme.of(context).colorScheme.outlineVariant),
                     const SizedBox(width: 10),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(l.nomComplet, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                      Text(bien?.nom ?? '', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                      Text(bien?.nom ?? '', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     ])),
                     Text(
                       _euro.format(montant),
@@ -309,7 +309,7 @@ class _LoyersMoisCard extends StatelessWidget {
                     if (!paye)
                       _ValiderBtn(loc: l, bien: bien, mois: now, data: data)
                     else
-                      const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
+                      Icon(Icons.chevron_right, size: 16, color: Theme.of(context).colorScheme.outlineVariant),
                   ]),
                 ),
               ),
@@ -394,14 +394,14 @@ class _LocataireDetailDash extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         children: [
           Center(child: Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
+              decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)))),
           Row(children: [
             CircleAvatar(radius: 22, backgroundColor: const Color(0xFFB5D4F4),
                 child: Text(loc.initiales, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF042C53)))),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(loc.nomComplet, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-              Text(bien?.nom ?? 'Aucun bien', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              Text(bien?.nom ?? 'Aucun bien', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ])),
           ]),
           const Divider(height: 24),
@@ -501,7 +501,7 @@ class _MoisPaiementRowState extends State<_MoisPaiementRow> {
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(moisStr[0].toUpperCase() + moisStr.substring(1),
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-          Text(_euro.format(montant), style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          Text(_euro.format(montant), style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         ])),
         if (!estPaye)
           TextButton(
@@ -517,7 +517,7 @@ class _MoisPaiementRowState extends State<_MoisPaiementRow> {
           )
         else
           IconButton(
-            icon: const Icon(Icons.undo, size: 18, color: Colors.grey),
+            icon: Icon(Icons.undo, size: 18, color: Theme.of(context).colorScheme.outlineVariant),
             tooltip: 'Annuler',
             onPressed: () => _annuler(paiement.id),
           ),
@@ -537,7 +537,7 @@ class _LocataireFullDetail extends StatelessWidget {
       height: MediaQuery.of(context).size.height * 0.9,
       child: Column(children: [
         Container(width: 36, height: 4, margin: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+            decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2))),
         Expanded(child: DefaultTabController(
           length: 1,
           child: Scaffold(
@@ -546,7 +546,7 @@ class _LocataireFullDetail extends StatelessWidget {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(loc.nomComplet, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 4),
-                Text(data.getBienById(loc.bienId)?.nom ?? '', style: TextStyle(color: Colors.grey[600])),
+                Text(data.getBienById(loc.bienId)?.nom ?? '', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 const Divider(height: 24),
                 const Text('Historique des paiements', style: TextStyle(fontWeight: FontWeight.w500)),
                 const SizedBox(height: 10),
@@ -640,7 +640,7 @@ class _RevenusChart extends StatelessWidget {
                 bottomTitles: AxisTitles(sideTitles: SideTitles(
                   showTitles: true,
                   getTitlesWidget: (v, _) => Text(moisLabels[v.toInt()],
-                      style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                      style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 )),
               ),
               gridData: const FlGridData(show: false),
@@ -710,7 +710,7 @@ class _Legend extends StatelessWidget {
     return Row(children: [
       Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
       const SizedBox(width: 6),
-      Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      Text(label, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
     ]);
   }
 }
@@ -735,7 +735,7 @@ class _AlertesCard extends StatelessWidget {
           const Text('Alertes', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
           const SizedBox(height: 10),
           if (urgents.isEmpty && retards.isEmpty)
-            const Text('Aucune alerte', style: TextStyle(fontSize: 12, color: Colors.grey))
+            Text('Aucune alerte', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant))
           else ...[
             ...urgents.map((t) => _AlerteItem(
               icon: Icons.build, color: AppTheme.danger,

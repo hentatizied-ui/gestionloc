@@ -54,7 +54,7 @@ class _BiensScreenState extends State<BiensScreen> {
             GestureDetector(
               onTap: _closeFab,
               behavior: HitTestBehavior.opaque,
-              child: Container(color: Colors.black.withOpacity(0.2)),
+              child: Container(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2)),
             ),
         ],
       ),
@@ -70,7 +70,7 @@ class _BiensScreenState extends State<BiensScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)],
+                  boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1), blurRadius: 4)],
                 ),
                 child: const Text('Ajouter un immeuble', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF378ADD))),
               ),
@@ -90,7 +90,7 @@ class _BiensScreenState extends State<BiensScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)],
+                  boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1), blurRadius: 4)],
                 ),
                 child: const Text('Ajouter un bien', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppTheme.primary)),
               ),
@@ -158,9 +158,9 @@ class _BiensScreenState extends State<BiensScreen> {
 
     if (biensSansImm.isNotEmpty) {
       if (data.immeubles.isNotEmpty) {
-        items.add(const Padding(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text('Biens indépendants', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: Colors.grey)),
+        items.add(Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Text('Biens indépendants', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         ));
       }
       for (final bien in biensSansImm) {
@@ -283,8 +283,8 @@ class _FilterBar extends StatelessWidget {
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE), width: 0.5)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant, width: 0.5)),
         color: Colors.white,
       ),
       child: Row(children: [
@@ -313,9 +313,9 @@ class _Chip extends StatelessWidget {
         decoration: BoxDecoration(
           color: active ? const Color(0xFFE1F5EE) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: active ? AppTheme.primary : Colors.grey[300]!, width: 0.5),
+          border: Border.all(color: active ? AppTheme.primary : Theme.of(context).colorScheme.outlineVariant, width: 0.5),
         ),
-        child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: active ? AppTheme.primaryDark : Colors.grey[600])),
+        child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: active ? AppTheme.primaryDark : Theme.of(context).colorScheme.onSurfaceVariant)),
       ),
     );
   }
@@ -351,9 +351,9 @@ class _BienCard extends StatelessWidget {
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(bien.nom, style: const TextStyle(fontWeight: FontWeight.w500)),
                 if (bien.immeubleId == null || bien.immeubleId!.isEmpty)
-                  Text('${bien.adresse}, ${bien.ville}', style: TextStyle(fontSize: 11, color: Colors.grey[600]), overflow: TextOverflow.ellipsis),
+                  Text('${bien.adresse}, ${bien.ville}', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant), overflow: TextOverflow.ellipsis),
                 if (locataire != null)
-                  Text(locataire.nomComplet, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                  Text(locataire.nomComplet, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ])),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 Text(_euro.format(bien.loyerMensuel), style: const TextStyle(fontWeight: FontWeight.w500, color: AppTheme.primary)),
@@ -409,7 +409,7 @@ class _BienDetail extends StatelessWidget {
         controller: ctrl,
         padding: const EdgeInsets.all(20),
         children: [
-          Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
+          Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 16),
           Row(children: [
             Expanded(child: Text(bien.nom, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500))),
@@ -448,7 +448,7 @@ class _Row extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(children: [
-        SizedBox(width: 100, child: Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[600]))),
+        SizedBox(width: 100, child: Text(label, style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant))),
         Expanded(child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
       ]),
     );
@@ -543,7 +543,7 @@ class _FormBienState extends State<FormBien> {
             controller: ctrl,
             padding: const EdgeInsets.all(20),
             children: [
-              Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
+              Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 12),
               Text(widget.bien == null ? 'Ajouter un bien' : 'Modifier le bien',
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
@@ -643,7 +643,7 @@ class _FormBienState extends State<FormBien> {
                 Expanded(child: _Field(ctrl: _surface, label: 'Surface (m²)', keyboard: TextInputType.number)),
                 const SizedBox(width: 12),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Pièces', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text('Pièces', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 6),
                   Row(children: [
                     IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () => setState(() { if (_pieces > 1) _pieces--; })),
@@ -778,7 +778,7 @@ class _FormImmeubleState extends State<FormImmeuble> {
             padding: const EdgeInsets.all(20),
             children: [
               Center(child: Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
+                  decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)))),
               Row(children: [
                 const Icon(Icons.apartment, color: AppTheme.blue),
                 const SizedBox(width: 8),
@@ -794,7 +794,7 @@ class _FormImmeubleState extends State<FormImmeuble> {
                 Expanded(child: _Field(ctrl: _codePostal, label: 'Code postal')),
               ]),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text("Nombre d'étages", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                Text("Nombre d'étages", style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 const SizedBox(height: 6),
                 Row(children: [
                   IconButton(

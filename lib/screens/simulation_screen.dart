@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import '../services/sheets_service.dart';
 import '../services/pdf_service.dart';
 import '../services/simulation_save_service.dart';
+import '../main.dart' show AppTheme;
 
 final _euro = NumberFormat.currency(locale: 'fr_FR', symbol: '€', decimalDigits: 0);
 
@@ -38,6 +39,14 @@ class _SimulationScreenState extends State<SimulationScreen> {
   final _nbAnnees  = TextEditingController();
   final _taux      = TextEditingController();
   final _dateDebut = TextEditingController();
+
+  // ── Simulation Rapide ────────────────────────────────────────────────────
+  final _rPrix        = TextEditingController();
+  final _rTravaux     = TextEditingController();
+  final _rLoyer       = TextEditingController();
+  final _rTaxe        = TextEditingController();
+
+  double _rParse(TextEditingController c) => double.tryParse(c.text.replaceAll(',', '.')) ?? 0;
 
   // ── Résultats Sheets ───────────────────────────────────────────────────────
   double? _echeance;                          // échéance mensuelle (D10)
@@ -158,8 +167,14 @@ class _SimulationScreenState extends State<SimulationScreen> {
           final int nbAns        = min(10, nbAnsSheet);              // 10 max → affichage
           final String eCol      = _colLetter(nbAnsSheet + 1);       // dernière colonne sheet
 
-          // Helper : construit [label, val0, val1, ..., val(n-1)]
-          List<dynamic> row(String label, List<dynamic> vals) => [label, ...vals];
+          // Toujours écrire jusqu'à la colonne AH (34 cols = label + 33 ans max)
+          // Les colonnes au-delà de nbAnsSheet sont remplies de '' → écrase les résidus
+          const int maxCols = 33; // max années supportées (colonne AH)
+          List<dynamic> rowPad(String label, List<dynamic> vals) => [
+            label,
+            ...vals,
+            ...List.filled(max(0, maxCols - vals.length), ''),
+          ];
 
           // Précalcul des listes (réutilisées dans writes ET tableData)
           final loyerSans = List.generate(nbAnsSheet, (i) {
@@ -172,37 +187,38 @@ class _SimulationScreenState extends State<SimulationScreen> {
             return _totalLoyers * m * pow(1.03, (annee - _dateDebutEmprunt!.year) ~/ 6);
           });
 
-          // ── Batch 1 (parallèle) ─────────────────────────────────────────────
+          // ── Batch 1 (parallèle) — range fixe A:AH écrase les résidus ──────────
           await Future.wait([
-            sheets.writeRange('Emprunt', 'A314:${eCol}314', [row('Année', List.generate(nbAnsSheet, (i) => anneesDisponibles[i]))]),
+            sheets.writeRange('Emprunt', 'A314:AH314', [rowPad('Année',
+              List.generate(nbAnsSheet, (i) => anneesDisponibles[i]))]),
             sheets.writeRange('Emprunt', 'A315:A318', [
               ['Intérêts par année'], ['Capital emprunt'], ['Échéance'], ['Capital remboursé'],
             ]),
-            sheets.writeRange('Emprunt', 'A321:${eCol}321', [row('Loyer annuel sans augmentation', loyerSans)]),
-            sheets.writeRange('Emprunt', 'A322:${eCol}322', [row('Loyer annuel avec augmentation', loyerAvec)]),
+            sheets.writeRange('Emprunt', 'A321:AH321', [rowPad('Loyer annuel sans augmentation', loyerSans)]),
+            sheets.writeRange('Emprunt', 'A322:AH322', [rowPad('Loyer annuel avec augmentation', loyerAvec)]),
           ]);
           await Future.delayed(const Duration(milliseconds: 250));
 
-          // ── Batch 2 (parallèle) ─────────────────────────────────────────────
+          // ── Batch 2 (parallèle) — range fixe A:AH écrase les résidus ──────────
           await Future.wait([
             sheets.writeCell('Emprunt', 'A323', 'Résultat d\'exploitation'),
-            sheets.writeRange('Emprunt', 'A324:${eCol}324', [row('Frais bancaire',
+            sheets.writeRange('Emprunt', 'A324:AH324', [rowPad('Frais bancaire',
               List.generate(nbAnsSheet, (i) => anneesDisponibles[i] - _dateDebutEmprunt!.year == 0 ? _fraisBancVal : 0.0))]),
-            sheets.writeRange('Emprunt', 'A325:${eCol}325', [row('Frais de notaire',
+            sheets.writeRange('Emprunt', 'A325:AH325', [rowPad('Frais de notaire',
               List.generate(nbAnsSheet, (i) => anneesDisponibles[i] - _dateDebutEmprunt!.year == 0 ? _fraisNotaire : 0.0))]),
-            sheets.writeRange('Emprunt', 'A326:${eCol}326', [row('Assurance PNO',
+            sheets.writeRange('Emprunt', 'A326:AH326', [rowPad('Assurance PNO',
               List.generate(nbAnsSheet, (i) {
                 final annee = anneesDisponibles[i];
                 final m = _calculerMoisActifsAnnee(annee, _dateDebutEmprunt!, _amortissement);
                 return _parse(_assurancePno) * pow(1.02, annee - _dateDebutEmprunt!.year) * (m / 12);
               }))]),
-            sheets.writeRange('Emprunt', 'A327:${eCol}327', [row('Taxe Foncière',
+            sheets.writeRange('Emprunt', 'A327:AH327', [rowPad('Taxe Foncière',
               List.generate(nbAnsSheet, (i) {
                 final annee = anneesDisponibles[i];
                 final m = _calculerMoisActifsAnnee(annee, _dateDebutEmprunt!, _amortissement);
                 return _parse(_taxeFonciere) * pow(1.02, annee - _dateDebutEmprunt!.year) * (m / 12);
               }))]),
-            sheets.writeRange('Emprunt', 'A328:${eCol}328', [row('Travaux',
+            sheets.writeRange('Emprunt', 'A328:AH328', [rowPad('Travaux',
               List.generate(nbAnsSheet, (i) => anneesDisponibles[i] - _dateDebutEmprunt!.year == 0 ? _travauxVal : 0.0))]),
             sheets.writeRange('Emprunt', 'A329:A338', [
               ['Résultat d\'exploitation net'],
@@ -218,7 +234,7 @@ class _SimulationScreenState extends State<SimulationScreen> {
             ]),
           ]);
 
-          debugPrint('Tableau récapitulatif envoyé en 2 lots parallèles');
+          debugPrint('Tableau récapitulatif envoyé (range fixe A:AH, résidus écrasés)');
 
           // Attendre que Sheets recalcule les formules
           await Future.delayed(const Duration(milliseconds: 1000));
@@ -293,6 +309,26 @@ class _SimulationScreenState extends State<SimulationScreen> {
     }
   }
 
+  void _reinitialiserFormulaire() {
+    setState(() {
+      // Champs de saisie
+      for (final c in [_prixAchat, _honoraires, _travaux, _fraisBancaires, _apport,
+                        _assurancePno, _copropriete, _taxeFonciere,
+                        _nbAnnees, _taux, _dateDebut]) {
+        c.clear();
+      }
+      for (final c in _loyers) c.clear();
+      // Type de bien
+      _typeBien = 'independant';
+      _updateNbApparts(1);
+      // Résultats
+      _echeance       = null;
+      _anneesTable    = [];
+      _toutesAnnees   = [];
+      _resultatsTable = {};
+    });
+  }
+
   // Formate un double en string sans décimales inutiles
   String _fmtNum(dynamic v) {
     final d = (v as num).toDouble();
@@ -343,8 +379,9 @@ class _SimulationScreenState extends State<SimulationScreen> {
         resultats: _resultatsTable,
       );
       if (mounted) {
+        _reinitialiserFormulaire();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Simulation sauvegardée (local + Drive)'),
+          content: Text('Simulation sauvegardée — formulaire réinitialisé'),
           backgroundColor: Color(0xFF2E7D32),
         ));
       }
@@ -358,8 +395,10 @@ class _SimulationScreenState extends State<SimulationScreen> {
   }
 
   Future<void> _ouvrirMesSimulations() async {
+    // Charger local immédiatement
     final sims = await SimulationSaveService.lister();
     if (!mounted) return;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -370,9 +409,11 @@ class _SimulationScreenState extends State<SimulationScreen> {
         simulations: sims,
         onCharger: (sim) { Navigator.pop(ctx); _chargerSimulation(sim); },
         onSupprimer: SimulationSaveService.supprimer,
-        onSync: SimulationSaveService.syncFromDrive,
       ),
     );
+
+    // Sync Drive en arrière-plan (met à jour si le sheet se rouvre)
+    SimulationSaveService.syncFromDrive();
   }
 
   void _chargerSimulation(SimulationComplete sim) {
@@ -485,14 +526,167 @@ class _SimulationScreenState extends State<SimulationScreen> {
     _nbAnnees.dispose();
     _taux.dispose();
     _dateDebut.dispose();
+    // Simulation Rapide
+    _rPrix.dispose();
+    _rTravaux.dispose();
+    _rLoyer.dispose();
+    _rTaxe.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          const TabBar(
+            tabs: [
+              Tab(text: 'Simulation Rapide'),
+              Tab(text: 'Simulation Détaillée'),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildSimulationRapide(),
+                _buildContent(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSimulationRapide() {
+    final prix          = _rParse(_rPrix);
+    final travaux       = _rParse(_rTravaux);
+    final loyer         = _rParse(_rLoyer);
+    final taxe          = _rParse(_rTaxe);
+    final fraisNotaire  = prix * 0.08;
+    final coutAcq       = prix + fraisNotaire + travaux;
+    final loyerAnnuel   = loyer * 12;
+    final rentBrute     = coutAcq > 0 ? (loyerAnnuel / coutAcq) * 100 : 0.0;
+    final rentNette     = coutAcq > 0 ? ((loyerAnnuel - taxe) / coutAcq) * 100 : 0.0;
+
+    final cs = Theme.of(context).colorScheme;
+
+    Widget champRapide(String label, TextEditingController ctrl, {String suffix = '€'}) =>
+      _Champ(
+        label: label,
+        controller: ctrl,
+        onChanged: (_) => setState(() {}),
+        suffix: suffix,
+        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d,.]'))],
+      );
+
+    Widget ligneAuto(String label, double valeur, {bool gras = false, Color? couleur}) {
+      final formatted = valeur > 0 ? _euro.format(valeur) : '—';
+      final textColor = couleur ?? (valeur > 0 ? cs.onSurface : cs.onSurfaceVariant);
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(children: [
+          Expanded(child: Text(label, style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant))),
+          Text(formatted, style: TextStyle(fontSize: 13, fontWeight: gras ? FontWeight.w700 : FontWeight.w500, color: textColor)),
+        ]),
+      );
+    }
+
+    Widget kpiRentabilite(String label, double valeur, Color couleur) {
+      final affiche = valeur > 0 ? '${valeur.toStringAsFixed(2)} %' : '—';
+      return Expanded(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: couleur.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: couleur.withValues(alpha: 0.3)),
+          ),
+          child: Column(children: [
+            Text(label, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant), textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text(affiche, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: couleur)),
+          ]),
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // ── Champs de saisie ─────────────────────────────────────────────────
+        const Text('Acquisition', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 12),
+        champRapide('Prix d\'achat', _rPrix),
+        const SizedBox(height: 12),
+        champRapide('Travaux', _rTravaux),
+        const SizedBox(height: 24),
+
+        const Text('Recettes & Charges', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 12),
+        champRapide('Loyer mensuel', _rLoyer),
+        const SizedBox(height: 12),
+        champRapide('Taxe foncière', _rTaxe),
+        const SizedBox(height: 24),
+
+        // ── Rentabilités ─────────────────────────────────────────────────────
+        const Text('Rentabilité', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 12),
+        Row(children: [
+          kpiRentabilite('Brute', rentBrute, AppTheme.primary),
+          const SizedBox(width: 12),
+          kpiRentabilite('Nette\n(hors emprunt)', rentNette, AppTheme.blue),
+        ]),
+        const SizedBox(height: 24),
+
+        // ── Récapitulatif ────────────────────────────────────────────────────
+        const Text('Récapitulatif', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: cs.outlineVariant),
+          ),
+          child: Column(children: [
+            ligneAuto('Prix d\'achat',         prix),
+            ligneAuto('Frais de notaire (8%)', fraisNotaire),
+            ligneAuto('Travaux',               travaux),
+            const Divider(height: 20),
+            ligneAuto('Coût d\'acquisition',   coutAcq, gras: true),
+            const Divider(height: 20),
+            ligneAuto('Loyer annuel',          loyerAnnuel),
+            ligneAuto('Taxe foncière',         taxe),
+          ]),
+        ),
+        const SizedBox(height: 24),
+      ]),
+    );
+  }
+
+  Widget _buildContent() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+        // ── Mes simulations (tout en haut) ────────────────────────────────────
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _ouvrirMesSimulations,
+            icon: const Icon(Icons.history),
+            label: const Text('Mes simulations sauvegardées'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
         const Text('Simulation d\'acquisition', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         const SizedBox(height: 16),
 
@@ -517,9 +711,9 @@ class _SimulationScreenState extends State<SimulationScreen> {
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.grey[50],
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey[200]!),
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           child: Column(children: [
             _Ligne('Prix d\'achat',         _prixVal),
@@ -550,7 +744,20 @@ class _SimulationScreenState extends State<SimulationScreen> {
         // ── Section Emprunt ────────────────────────────────────────────────────
         const Text('Paramètres d\'emprunt', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         const SizedBox(height: 16),
-        _Champ(label: 'Nombre d\'années', controller: _nbAnnees, onChanged: (_) => setState(() {}), suffix: 'ans'),
+        _Champ(
+          label: 'Nombre d\'années',
+          controller: _nbAnnees,
+          onChanged: (v) {
+            final val = int.tryParse(v) ?? 0;
+            if (val > 25) {
+              _nbAnnees.text = '25';
+              _nbAnnees.selection = const TextSelection.collapsed(offset: 2);
+            }
+            setState(() {});
+          },
+          suffix: 'ans',
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        ),
         const SizedBox(height: 12),
         _LigneCalculee(
           label: 'Amortissement',
@@ -572,21 +779,6 @@ class _SimulationScreenState extends State<SimulationScreen> {
           ],
         ),
         const SizedBox(height: 20),
-
-        // ── Bouton Mes simulations ─────────────────────────────────────────────
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _ouvrirMesSimulations,
-            icon: const Icon(Icons.history),
-            label: const Text('Mes simulations sauvegardées'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
 
         // ── Bouton calculer ────────────────────────────────────────────────────
         SizedBox(
@@ -629,9 +821,9 @@ class _SimulationScreenState extends State<SimulationScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const Text(
+                  Text(
                     'Constante sur toute la durée',
-                    style: TextStyle(color: Colors.grey, fontSize: 10),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 10),
                   ),
                 ]),
               ),
@@ -688,7 +880,7 @@ class _SimulationScreenState extends State<SimulationScreen> {
         ],
       ]),
     );
-  }
+  } // fin _buildContent
 
   bool get _peutCalculer => _prixVal > 0 && _nbAnneesVal > 0 && _tauxVal > 0;
 }
@@ -750,14 +942,14 @@ class _TableauSimulation extends StatelessWidget {
     'tauxRentaNet',
   };
 
-  Color _valueColor(String key, double value) {
+  Color _valueColor(String key, double value, BuildContext context) {
     if (_financialKeys.contains(key)) {
       return value >= 0 ? const Color(0xFF2E7D32) : const Color(0xFFEF5350);
     }
-    if (_chargeKeys.contains(key)) return Colors.grey[600]!;
+    if (_chargeKeys.contains(key)) return Theme.of(context).colorScheme.onSurfaceVariant;
     if (_tauxKeys.contains(key))   return const Color(0xFF1565C0);
     if (key == 'loyer')            return const Color(0xFF1565C0);
-    return Colors.grey[800]!;
+    return Theme.of(context).colorScheme.onSurface;
   }
 
   String _format(String key, bool isPercent, double value) {
@@ -794,7 +986,7 @@ class _TableauSimulation extends StatelessWidget {
 
       // Séparateurs : entre capital remboursé (3) et loyer (4), entre travaux (10) et résultat net (11)
       if (rowIdx == 4 || rowIdx == 11) {
-        labelRows.add(Container(height: 2, width: labelWidth, color: Colors.grey[300]));
+        labelRows.add(Container(height: 2, width: labelWidth, color: Theme.of(context).colorScheme.outlineVariant));
       }
 
       labelRows.add(Container(
@@ -805,7 +997,7 @@ class _TableauSimulation extends StatelessWidget {
         color: bg,
         child: Text(
           label,
-          style: const TextStyle(fontSize: 11, color: Colors.black87),
+          style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface),
           overflow: TextOverflow.ellipsis,
         ),
       ));
@@ -833,10 +1025,10 @@ class _TableauSimulation extends StatelessWidget {
         final bg     = isEven ? Colors.white : Colors.grey[50]!;
         final vals   = resultats[key] ?? [];
         final value  = ci < vals.length ? vals[ci] : 0.0;
-        final color  = _valueColor(key, value);
+        final color  = _valueColor(key, value, context);
 
         if (rowIdx == 4 || rowIdx == 11) {
-          cells.add(Container(height: 2, width: colWidth, color: Colors.grey[300]));
+          cells.add(Container(height: 2, width: colWidth, color: Theme.of(context).colorScheme.outlineVariant));
         }
 
         cells.add(Container(
@@ -860,7 +1052,7 @@ class _TableauSimulation extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: Container(
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[300]!),
+          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -934,13 +1126,13 @@ class _LigneCalculee extends StatelessWidget {
       displayText = formatSansDevise.format(valeur);
       if (suffix.isNotEmpty) displayText += ' $suffix';
     }
-    final textColor = couleur ?? (actif ? const Color(0xFF1B5E20) : Colors.grey);
+    final textColor = couleur ?? (actif ? const Color(0xFF1B5E20) : Theme.of(context).colorScheme.onSurfaceVariant);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Row(children: [
         Expanded(child: Text(label, style: TextStyle(color: textColor, fontSize: 14))),
@@ -970,7 +1162,7 @@ class _Ligne extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(children: [
         Expanded(child: Text(label, style: TextStyle(
-          color: couleur ?? Colors.grey[700],
+          color: couleur ?? Theme.of(context).colorScheme.onSurface,
           fontSize: 13,
           fontWeight: gras ? FontWeight.w700 : FontWeight.normal,
         ))),
@@ -1056,7 +1248,7 @@ class _RecettesChargesSection extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey[300]!),
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(children: [
@@ -1073,7 +1265,7 @@ class _RecettesChargesSection extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.add_circle_outline),
               padding: EdgeInsets.zero, constraints: const BoxConstraints(),
-              onPressed: () => onNbAppartsChanged(nbApparts + 1),
+              onPressed: nbApparts < 9 ? () => onNbAppartsChanged(nbApparts + 1) : null,
             ),
           ]),
         ),
@@ -1115,8 +1307,20 @@ class DateEmpruntInputFormatter extends TextInputFormatter {
     // Garder uniquement les chiffres
     String digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
 
-    // Limiter à 6 chiffres (2 pour mois + 4 pour année)
+    // Limiter à 6 chiffres (MM + AAAA)
     if (digits.length > 6) digits = digits.substring(0, 6);
+
+    // Valider et corriger le mois dès que 2 chiffres sont saisis
+    if (digits.length >= 2) {
+      int mm = int.parse(digits.substring(0, 2));
+      if (mm == 0) mm = 1;
+      if (mm > 12) mm = 12;
+      digits = mm.toString().padLeft(2, '0') + digits.substring(2);
+    } else if (digits.length == 1) {
+      // Si le premier chiffre > 1, impossible d'avoir un mois valide à 2 chiffres → préfixer 0
+      final d = int.parse(digits);
+      if (d > 1) digits = '0$d';
+    }
 
     // Formater avec tiret après le mois
     String formatted = digits;
@@ -1124,16 +1328,9 @@ class DateEmpruntInputFormatter extends TextInputFormatter {
       formatted = '${digits.substring(0, 2)}-${digits.substring(2)}';
     }
 
-    // Ajuster la position du curseur
-    int cursorPos = formatted.length;
-    // Si ajout d'un caractère et qu'un tiret a été inséré, avancer le curseur
-    if (oldValue.text.length < newValue.text.length && formatted.length > 2 && formatted[2] == '-') {
-      cursorPos = newValue.selection.baseOffset + 1;
-    }
-
     return TextEditingValue(
       text: formatted,
-      selection: TextSelection.collapsed(offset: cursorPos),
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }
@@ -1146,13 +1343,11 @@ class _MesSimulationsSheet extends StatefulWidget {
   final List<SimulationComplete> simulations;
   final void Function(SimulationComplete) onCharger;
   final Future<void> Function(String) onSupprimer;
-  final Future<List<SimulationComplete>> Function() onSync;
 
   const _MesSimulationsSheet({
     required this.simulations,
     required this.onCharger,
     required this.onSupprimer,
-    required this.onSync,
   });
 
   @override
@@ -1161,7 +1356,6 @@ class _MesSimulationsSheet extends StatefulWidget {
 
 class _MesSimulationsSheetState extends State<_MesSimulationsSheet> {
   late List<SimulationComplete> _sims;
-  bool _syncing = false;
 
   @override
   void initState() {
@@ -1183,7 +1377,7 @@ class _MesSimulationsSheetState extends State<_MesSimulationsSheet> {
         Container(
           margin: const EdgeInsets.symmetric(vertical: 8),
           width: 40, height: 4,
-          decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(2)),
+          decoration: BoxDecoration(color: Theme.of(ctx).colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)),
         ),
 
         // Titre
@@ -1195,7 +1389,7 @@ class _MesSimulationsSheetState extends State<_MesSimulationsSheet> {
             const Expanded(
               child: Text('Mes simulations', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
-            Text('${_sims.length}', style: const TextStyle(color: Colors.grey)),
+            Text('${_sims.length}', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
           ]),
         ),
         const Divider(height: 1),
@@ -1203,13 +1397,11 @@ class _MesSimulationsSheetState extends State<_MesSimulationsSheet> {
         // Liste
         Expanded(
           child: _sims.isEmpty
-            ? const Center(
+            ? Center(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.inbox_outlined, size: 48, color: Colors.grey),
-                  SizedBox(height: 8),
-                  Text('Aucune simulation sauvegardée', style: TextStyle(color: Colors.grey)),
-                  SizedBox(height: 4),
-                  Text('Utilisez "Récupérer depuis Drive" pour restaurer', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  Icon(Icons.inbox_outlined, size: 48, color: Theme.of(ctx).colorScheme.outlineVariant),
+                  const SizedBox(height: 8),
+                  Text('Aucune simulation sauvegardée', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
                 ]),
               )
             : ListView.separated(
@@ -1241,31 +1433,7 @@ class _MesSimulationsSheetState extends State<_MesSimulationsSheet> {
               ),
         ),
 
-        // Bouton sync Drive
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _syncing ? null : () async {
-                setState(() => _syncing = true);
-                final news = await widget.onSync();
-                final updated = await SimulationSaveService.lister();
-                if (!mounted) return;
-                setState(() { _sims = updated; _syncing = false; });
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(news.isEmpty
-                    ? 'Déjà à jour'
-                    : '${news.length} simulation(s) récupérée(s) depuis Drive'),
-                ));
-              },
-              icon: _syncing
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.cloud_download_outlined),
-              label: Text(_syncing ? 'Synchronisation...' : 'Récupérer depuis Drive'),
-            ),
-          ),
-        ),
+        const SizedBox(height: 16),
       ]),
     );
   }

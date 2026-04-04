@@ -36,7 +36,7 @@ class _FinancesScreenState extends State<FinancesScreen> with SingleTickerProvid
           child: TabBar(
             controller: _tab,
             labelColor: AppTheme.primary,
-            unselectedLabelColor: Colors.grey[600],
+            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
             indicatorColor: AppTheme.primary,
             tabs: const [
               Tab(text: 'Transactions'),
@@ -179,7 +179,7 @@ class _EmptySection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Center(child: Text(msg, style: TextStyle(color: Colors.grey[500], fontSize: 13))),
+      child: Center(child: Text(msg, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13))),
     );
   }
 }
@@ -221,7 +221,7 @@ class _CollapsibleSectionState extends State<_CollapsibleSection> {
             ),
             const SizedBox(width: 8),
             Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                color: Colors.grey, size: 20),
+                color: Theme.of(context).colorScheme.outlineVariant, size: 20),
           ]),
         ),
       ),
@@ -245,9 +245,9 @@ class _KpiCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(12)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+        Text(label, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: 4),
         Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: color)),
       ]),
@@ -291,7 +291,7 @@ class _TxRow extends StatelessWidget {
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(tx.label, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
             Text('${bien?.nom ?? ''} · ${_dateF.format(tx.date)}',
-                style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text(
@@ -316,12 +316,12 @@ class _TxRow extends StatelessWidget {
                   shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
                   builder: (_) => FormTransaction(data: data, transaction: tx),
                 ),
-                child: const Icon(Icons.edit_outlined, size: 14, color: Colors.grey),
+                child: Icon(Icons.edit_outlined, size: 14, color: Theme.of(context).colorScheme.outlineVariant),
               ),
               const SizedBox(width: 6),
               InkWell(
                 onTap: () => data.supprimerTransaction(tx.id),
-                child: const Icon(Icons.delete_outline, size: 14, color: Colors.grey),
+                child: Icon(Icons.delete_outline, size: 14, color: Theme.of(context).colorScheme.outlineVariant),
               ),
             ]),
           ]),
@@ -468,14 +468,14 @@ class _BilanBienCardState extends State<_BilanBienCard> {
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(widget.bien.nom, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
-                Text('${widget.txCount} transaction(s)', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                Text('${widget.txCount} transaction(s)', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ])),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 Text(_euro.format(widget.net), style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: isPos ? AppTheme.primary : AppTheme.danger)),
-                Text('net', style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                Text('net', style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ]),
               const SizedBox(width: 8),
-              Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.grey),
+              Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Theme.of(context).colorScheme.outlineVariant),
             ]),
           ),
         ),
@@ -493,7 +493,7 @@ class _BilanBienCardState extends State<_BilanBienCard> {
               ]),
               const SizedBox(height: 12),
               if (txs.isEmpty)
-                Text('Aucune transaction', style: TextStyle(fontSize: 12, color: Colors.grey[500]))
+                Text('Aucune transaction', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant))
               else
                 ...txs.map((tx) => Padding(
                   padding: const EdgeInsets.only(bottom: 6),
@@ -522,9 +522,9 @@ class _MiniKpi extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(8)),
       child: Column(children: [
-        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+        Text(label, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: 2),
         Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: color)),
       ]),
@@ -545,13 +545,13 @@ class _BilanSansBienCard extends StatelessWidget {
         child: Row(children: [
           Container(
             width: 40, height: 40,
-            decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.receipt_outlined, size: 20, color: Colors.grey),
+            decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(10)),
+            child: Icon(Icons.receipt_outlined, size: 20, color: Theme.of(context).colorScheme.outlineVariant),
           ),
           const SizedBox(width: 12),
-          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Charges générales', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
-            Text('Non rattachées à un bien', style: TextStyle(fontSize: 11, color: Colors.grey)),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Charges générales', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+            Text('Non rattachées à un bien', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ])),
           Text(_euro.format(net), style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14,
               color: net >= 0 ? AppTheme.primary : AppTheme.danger)),
@@ -587,11 +587,11 @@ class _ChargesFixesTabState extends State<_ChargesFixesTab> {
 
     if (all.isEmpty) {
       return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        const Icon(Icons.repeat, size: 48, color: Colors.grey),
+        Icon(Icons.repeat, size: 48, color: Theme.of(context).colorScheme.outlineVariant),
         const SizedBox(height: 12),
-        Text('Aucune charge fixe', style: TextStyle(color: Colors.grey[600])),
+        Text('Aucune charge fixe', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: 6),
-        Text('Ajoutez vos crédits, assurances...', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+        Text('Ajoutez vos crédits, assurances...', style: TextStyle(color: Theme.of(context).colorScheme.outlineVariant, fontSize: 12)),
       ]));
     }
 
@@ -616,14 +616,14 @@ class _ChargesFixesTabState extends State<_ChargesFixesTab> {
           ),
           child: Row(children: [
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Total $_annee', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              Text('Total $_annee', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               Text(_euro.format(totalAnnee),
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: AppTheme.danger)),
             ])),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               Text('${credits.length + assurances.length + taxes.length + factures.length} actives',
-                  style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-              Text('sur ${all.length} total', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                  style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              Text('sur ${all.length} total', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ]),
           ]),
         ),
@@ -672,7 +672,7 @@ class _CfSectionState extends State<_CfSection> {
             Expanded(child: Text(widget.label,
                 style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14))),
             if (widget.items.isEmpty)
-              Text('Aucune', style: TextStyle(fontSize: 12, color: Colors.grey[400]))
+              Text('Aucune', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outlineVariant))
             else
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -684,7 +684,7 @@ class _CfSectionState extends State<_CfSection> {
               ),
             const SizedBox(width: 8),
             Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                color: Colors.grey, size: 20),
+                color: Theme.of(context).colorScheme.outlineVariant, size: 20),
           ]),
         ),
       ),
@@ -693,7 +693,7 @@ class _CfSectionState extends State<_CfSection> {
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text('Aucun élément pour ${widget.annee}',
-                style: TextStyle(fontSize: 12, color: Colors.grey[400])),
+                style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outlineVariant)),
           )
         else
           ...widget.items.map((cf) => _ChargeFixeRow(cf: cf, data: widget.data)),
@@ -742,7 +742,7 @@ class _ChargeFixeRow extends StatelessWidget {
           Container(
             width: 40, height: 40,
             decoration: BoxDecoration(
-              color: cf.actif ? const Color(0xFFFCEBEB) : Colors.grey[100],
+              color: cf.actif ? const Color(0xFFFCEBEB) : Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Center(child: Text(_icon(cf.type), style: const TextStyle(fontSize: 18))),
@@ -750,15 +750,15 @@ class _ChargeFixeRow extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(cf.label, style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13,
-                color: cf.actif ? Colors.black : Colors.grey)),
+                color: cf.actif ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.outlineVariant)),
             Text(nomCible,
-                style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-            Text(_datesCf(cf), style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            Text(_datesCf(cf), style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('-${_euro.format(cf.estAnnuelle ? cf.montant * 12 : cf.montant)}${cf.estAnnuelle ? '/an' : '/mois'}',
                 style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13,
-                    color: cf.actif ? AppTheme.danger : Colors.grey)),
+                    color: cf.actif ? AppTheme.danger : Theme.of(context).colorScheme.outlineVariant)),
             const SizedBox(height: 4),
 
           ]),
@@ -773,7 +773,7 @@ class _ChargeFixeRow extends StatelessWidget {
               ),
             ),
           IconButton(
-            icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.grey),
+            icon: Icon(Icons.edit_outlined, size: 18, color: Theme.of(context).colorScheme.outlineVariant),
             onPressed: () => showModalBottomSheet(
               context: context, isScrollControlled: true,
               shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
@@ -781,7 +781,7 @@ class _ChargeFixeRow extends StatelessWidget {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, size: 18, color: Colors.grey),
+            icon: Icon(Icons.delete_outline, size: 18, color: Theme.of(context).colorScheme.outlineVariant),
             onPressed: () => data.supprimerChargeFixe(cf.id),
           ),
         ]),
@@ -913,7 +913,7 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
             padding: const EdgeInsets.all(20),
             children: [
               Center(child: Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
+                  decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)))),
               const Text('Ajouter une charge', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
               const SizedBox(height: 20),
 
@@ -1069,12 +1069,12 @@ class _FormChargeFixeState extends State<FormChargeFixe> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(children: [
-                  const Icon(Icons.attach_file, size: 18, color: Colors.grey),
+                  Icon(Icons.attach_file, size: 18, color: Theme.of(context).colorScheme.outlineVariant),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _justificatif != null
                         ? Text('Justificatif joint', style: TextStyle(color: Colors.green[700], fontSize: 13))
-                        : const Text('Aucun justificatif', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                        : Text('Aucun justificatif', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
                   ),
                   if (_uploadingJustif)
                     const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -1217,13 +1217,13 @@ class _TypeCBtn extends StatelessWidget {
           decoration: BoxDecoration(
             color: active ? AppTheme.primary.withOpacity(0.1) : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: active ? AppTheme.primary : Colors.grey[300]!),
+            border: Border.all(color: active ? AppTheme.primary : Theme.of(context).colorScheme.outlineVariant),
           ),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: 20, color: active ? AppTheme.primary : Colors.grey[500]),
+            Icon(icon, size: 20, color: active ? AppTheme.primary : Theme.of(context).colorScheme.outlineVariant),
             const SizedBox(height: 4),
             Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
-                color: active ? AppTheme.primary : Colors.grey[600])),
+                color: active ? AppTheme.primary : Theme.of(context).colorScheme.onSurfaceVariant)),
           ]),
         ),
       ),
@@ -1245,11 +1245,11 @@ class _FreqCBtn extends StatelessWidget {
         decoration: BoxDecoration(
           color: active ? AppTheme.primary.withOpacity(0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: active ? AppTheme.primary : Colors.grey[300]!),
+          border: Border.all(color: active ? AppTheme.primary : Theme.of(context).colorScheme.outlineVariant),
         ),
         child: Text(label, textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500,
-                color: active ? AppTheme.primary : Colors.grey[600])),
+                color: active ? AppTheme.primary : Theme.of(context).colorScheme.onSurfaceVariant)),
       ),
     );
   }
@@ -1276,13 +1276,13 @@ class _SousTypeBtn extends StatelessWidget {
           decoration: BoxDecoration(
             color: active ? AppTheme.primary.withOpacity(0.1) : Colors.transparent,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: active ? AppTheme.primary : Colors.grey[300]!),
+            border: Border.all(color: active ? AppTheme.primary : Theme.of(context).colorScheme.outlineVariant),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Text(emoji, style: const TextStyle(fontSize: 14)),
             const SizedBox(width: 6),
             Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
-                color: active ? AppTheme.primary : Colors.grey[600])),
+                color: active ? AppTheme.primary : Theme.of(context).colorScheme.onSurfaceVariant)),
           ]),
         ),
       ),
@@ -1339,14 +1339,14 @@ class _AnneePickerCF extends StatelessWidget {
       Expanded(child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[400]!),
+          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(children: [
-          const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
+          Icon(Icons.calendar_today_outlined, size: 14, color: Theme.of(context).colorScheme.outlineVariant),
           const SizedBox(width: 8),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Année fiscale', style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+            Text('Année fiscale', style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             const SizedBox(height: 2),
             Text(annee.toString(), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
           ]),
@@ -1400,18 +1400,18 @@ class _DatePickerCF extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[400]!),
+          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(children: [
-          const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
+          Icon(Icons.calendar_today_outlined, size: 14, color: Theme.of(context).colorScheme.outlineVariant),
           const SizedBox(width: 8),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+            Text(label, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             const SizedBox(height: 2),
             Text(date != null ? fmt.format(date!) : 'Sans fin',
                 style: TextStyle(fontSize: 13, fontWeight: date != null ? FontWeight.w500 : FontWeight.normal,
-                    color: date != null ? Colors.black : Colors.grey)),
+                    color: date != null ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurfaceVariant)),
           ])),
         ]),
       ),
@@ -1473,7 +1473,7 @@ class _FormTransactionState extends State<FormTransaction> {
             controller: ctrl,
             padding: const EdgeInsets.all(20),
             children: [
-              Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
+              Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 12),
               Text(isEdit ? 'Modifier la transaction' : 'Nouvelle transaction',
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
@@ -1530,16 +1530,16 @@ class _FormTransactionState extends State<FormTransaction> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey[400]!),
+                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(children: [
-                  const Icon(Icons.attach_file, size: 18, color: Colors.grey),
+                  Icon(Icons.attach_file, size: 18, color: Theme.of(context).colorScheme.outlineVariant),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _justificatif != null
                         ? Text('Justificatif joint', style: TextStyle(color: Colors.green[700], fontSize: 13))
-                        : const Text('Aucun justificatif', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                        : Text('Aucun justificatif', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
                   ),
                   if (_uploadingJustif)
                     const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -1665,10 +1665,10 @@ class _TypeBtn extends StatelessWidget {
         decoration: BoxDecoration(
           color: active ? color.withOpacity(0.12) : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: active ? color : Colors.grey[300]!),
+          border: Border.all(color: active ? color : Theme.of(context).colorScheme.outlineVariant),
         ),
         child: Text(label, textAlign: TextAlign.center,
-            style: TextStyle(fontWeight: FontWeight.w500, color: active ? color : Colors.grey[600])),
+            style: TextStyle(fontWeight: FontWeight.w500, color: active ? color : Theme.of(context).colorScheme.onSurfaceVariant)),
       ),
     );
   }
@@ -1735,8 +1735,8 @@ class _FilterBar extends StatelessWidget {
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE), width: 0.5)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant, width: 0.5)),
         color: Colors.white,
       ),
       child: SingleChildScrollView(
@@ -1770,10 +1770,10 @@ class _Chip extends StatelessWidget {
         decoration: BoxDecoration(
           color: active ? const Color(0xFFE1F5EE) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: active ? AppTheme.primary : Colors.grey[300]!, width: 0.5),
+          border: Border.all(color: active ? AppTheme.primary : Theme.of(context).colorScheme.outlineVariant, width: 0.5),
         ),
         child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
-            color: active ? AppTheme.primaryDark : Colors.grey[600])),
+            color: active ? AppTheme.primaryDark : Theme.of(context).colorScheme.onSurfaceVariant)),
       ),
     );
   }
@@ -1819,10 +1819,10 @@ class _TicketCard extends StatelessWidget {
                 Text(ticket.titre, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
                 const SizedBox(height: 3),
                 Text('${bien?.nom ?? ticket.bienId} · ${_dateF.format(ticket.dateCreation)}',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                    style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 if (ticket.rapportePar != null) ...[
                   const SizedBox(height: 2),
-                  Text('Signalé par ${ticket.rapportePar}', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                  Text('Signalé par ${ticket.rapportePar}', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 ],
               ])),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -1833,7 +1833,7 @@ class _TicketCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 PopupMenuButton<StatutTicket>(
-                  icon: const Icon(Icons.more_vert, size: 18, color: Colors.grey),
+                  icon: Icon(Icons.more_vert, size: 18, color: Theme.of(context).colorScheme.outlineVariant),
                   itemBuilder: (_) => StatutTicket.values.map((s) =>
                       PopupMenuItem(value: s, child: Text(s.name))).toList(),
                   onSelected: (s) => data.modifierStatutTicket(ticket.id, s),
@@ -1876,7 +1876,7 @@ class _FormTicketState extends State<FormTicket> {
             controller: ctrl,
             padding: const EdgeInsets.all(20),
             children: [
-              Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
+              Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 12),
               const Text('Nouveau ticket', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
               const SizedBox(height: 20),
@@ -1980,7 +1980,7 @@ class _JustificatifBtnState extends State<_JustificatifBtn> {
             icon: Icon(
               hasJustif ? Icons.attach_file : Icons.attach_file_outlined,
               size: 18,
-              color: hasJustif ? AppTheme.primary : Colors.grey[400],
+              color: hasJustif ? AppTheme.primary : Theme.of(context).colorScheme.outlineVariant,
             ),
             tooltip: hasJustif ? 'Voir le justificatif' : 'Ajouter un justificatif',
             onPressed: () => hasJustif ? _ouvrir() : _ajouter(),

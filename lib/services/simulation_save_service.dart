@@ -81,7 +81,7 @@ class SimulationSaveService {
 
   static Future<void> _sauvegarderLocal(SimulationComplete sim) async {
     final prefs = await SharedPreferences.getInstance();
-    final list  = await lister();
+    final list  = await lister(); // déjà dédupliqué
     final idx   = list.indexWhere((s) => s.id == sim.id);
     if (idx >= 0) list[idx] = sim; else list.insert(0, sim);
     await prefs.setStringList(_prefKey, list.map((s) => jsonEncode(s.toJson())).toList());
@@ -110,13 +110,17 @@ class SimulationSaveService {
   static Future<List<SimulationComplete>> lister() async {
     final prefs    = await SharedPreferences.getInstance();
     final jsonList = prefs.getStringList(_prefKey) ?? [];
-    return jsonList.map((s) {
+    final all = jsonList.map((s) {
       try {
         return SimulationComplete.fromJson(jsonDecode(s) as Map<String, dynamic>);
       } catch (_) {
         return null;
       }
     }).whereType<SimulationComplete>().toList();
+
+    // Déduplication par ID (garde la première occurrence = la plus récente)
+    final seen = <String>{};
+    return all.where((s) => seen.add(s.id)).toList();
   }
 
   // ─── SUPPRIMER ─────────────────────────────────────────────────────────

@@ -109,9 +109,9 @@ class _LocataireRow extends StatelessWidget {
                   Text(loc.nomComplet,
                       style: const TextStyle(fontWeight: FontWeight.w500)),
                   Text(bien != null ? bien.nom : 'Aucun bien assigné',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   Text('Bail jusqu\'au ${_dateF.format(loc.finBail)}',
-                      style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                      style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 ])),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               if (bien != null)
@@ -167,7 +167,7 @@ class _LocataireDetail extends StatelessWidget {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                      color: Colors.grey[300],
+                      color: Theme.of(context).colorScheme.outlineVariant,
                       borderRadius: BorderRadius.circular(2)))),
           Row(children: [
             CircleAvatar(
@@ -187,7 +187,7 @@ class _LocataireDetail extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 18, fontWeight: FontWeight.w500)),
                   Text(loc.email,
-                      style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+                      style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 ])),
             IconButton(
                 icon: const Icon(Icons.edit_outlined),
@@ -400,36 +400,36 @@ class _HistoriquePaiementsState extends State<_HistoriquePaiements> {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.grey[100],
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey[300]!, width: 0.5),
+                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
               ),
               child: Row(children: [
-                const Icon(Icons.schedule, size: 18, color: Colors.grey),
+                Icon(Icons.schedule, size: 18, color: Theme.of(context).colorScheme.outlineVariant),
                 const SizedBox(width: 10),
                 Expanded(
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                       Text(_capitalize(_dateMoisF.format(m)),
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
-                              color: Colors.grey)),
+                              color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       Text(
                           'Disponible le 1er ${_capitalize(
                                   DateFormat('MMMM', 'fr_FR').format(m))}',
                           style:
-                              TextStyle(fontSize: 11, color: Colors.grey[500])),
+                              TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     ])),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                      color: Colors.grey[200],
+                      color: Theme.of(context).colorScheme.outlineVariant,
                       borderRadius: BorderRadius.circular(8)),
-                  child: const Text('À venir',
-                      style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  child: Text('À venir',
+                      style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 ),
               ]),
             ),
@@ -467,7 +467,7 @@ class _HistoriquePaiementsState extends State<_HistoriquePaiements> {
                   if (estPaye)
                     Text(_euro.format(paiement.montant),
                         style:
-                            TextStyle(fontSize: 11, color: Colors.grey[600])),
+                            TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 ])),
             if (!estPaye)
               TextButton(
@@ -508,7 +508,7 @@ class _HistoriquePaiementsState extends State<_HistoriquePaiements> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.undo, size: 18, color: Colors.grey),
+                  icon: Icon(Icons.undo, size: 18, color: Theme.of(context).colorScheme.outlineVariant),
                   tooltip: 'Annuler',
                   onPressed: () => _supprimerPaiement(paiement.id),
                 ),
@@ -644,7 +644,7 @@ class _QuittanceSheet extends StatelessWidget {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                      color: Colors.grey[300],
+                      color: Theme.of(context).colorScheme.outlineVariant,
                       borderRadius: BorderRadius.circular(2)))),
           Row(children: [
             const Icon(Icons.receipt_long, color: AppTheme.primary),
@@ -660,9 +660,9 @@ class _QuittanceSheet extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.grey[50],
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[200]!),
+              border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
             ),
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -684,7 +684,7 @@ class _QuittanceSheet extends StatelessWidget {
               const SizedBox(height: 6),
               Text(msg,
                   style: TextStyle(
-                      fontSize: 12, color: Colors.grey[700], height: 1.6)),
+                      fontSize: 12, color: Theme.of(context).colorScheme.onSurface, height: 1.6)),
             ]),
           ),
           const SizedBox(height: 16),
@@ -839,7 +839,7 @@ class _InfoRow extends StatelessWidget {
         SizedBox(
             width: 110,
             child: Text(label,
-                style: TextStyle(fontSize: 13, color: Colors.grey[600]))),
+                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant))),
         Expanded(
             child: Text(value,
                 style: const TextStyle(
@@ -909,7 +909,7 @@ class _FormLocataireState extends State<FormLocataire> {
                       height: 4,
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
-                          color: Colors.grey[300],
+                          color: Theme.of(context).colorScheme.outlineVariant,
                           borderRadius: BorderRadius.circular(2)))),
               Text(_isEdit ? 'Modifier le locataire' : 'Nouveau locataire',
                   style: const TextStyle(
@@ -1151,13 +1151,13 @@ class _DatePicker extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey[400]!),
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
             borderRadius: BorderRadius.circular(10)),
         child: Row(children: [
-          const Icon(Icons.calendar_today_outlined,
-              size: 16, color: Colors.grey),
+          Icon(Icons.calendar_today_outlined,
+              size: 16, color: Theme.of(context).colorScheme.outlineVariant),
           const SizedBox(width: 10),
-          Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+          Text(label, style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const Spacer(),
           Text(_dateF.format(date),
               style:

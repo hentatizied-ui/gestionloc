@@ -77,10 +77,104 @@ class AppTheme {
   }
 
   static ThemeData dark() {
+    const bg      = Color(0xFF121212);
+    const surface = Color(0xFF1E1E1E);
+    const surface2 = Color(0xFF2C2C2C);
+    const border  = Color(0xFF3A3A3A);
+    const textPrimary   = Color(0xFFEEEEEE);
+    const textSecondary = Color(0xFFAAAAAA);
+
     return ThemeData(
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(seedColor: primary, brightness: Brightness.dark),
-      scaffoldBackgroundColor: const Color(0xFF121212),
+      scaffoldBackgroundColor: bg,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: surface,
+        elevation: 0,
+        scrolledUnderElevation: 0.5,
+        titleTextStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: textPrimary),
+        iconTheme: IconThemeData(color: textPrimary),
+      ),
+      cardTheme: CardThemeData(
+        elevation: 0,
+        color: surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: border, width: 0.5),
+        ),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: surface,
+        selectedItemColor: primary,
+        unselectedItemColor: Color(0xFF9E9E9E),
+        type: BottomNavigationBarType.fixed,
+        elevation: 0,
+      ),
+      dividerTheme: const DividerThemeData(color: border),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: surface2,
+        labelStyle: const TextStyle(color: textSecondary),
+        hintStyle: const TextStyle(color: textSecondary),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: primary, width: 1.5),
+        ),
+      ),
+      dialogTheme: const DialogThemeData(backgroundColor: surface),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: surface,
+        modalBackgroundColor: surface,
+      ),
+      popupMenuTheme: const PopupMenuThemeData(color: surface2),
+      snackBarTheme: const SnackBarThemeData(
+        backgroundColor: surface2,
+        contentTextStyle: TextStyle(color: textPrimary),
+      ),
+      listTileTheme: const ListTileThemeData(
+        textColor: textPrimary,
+        iconColor: textSecondary,
+      ),
+      iconTheme: const IconThemeData(color: textPrimary),
+      textTheme: const TextTheme(
+        bodyLarge:   TextStyle(color: textPrimary),
+        bodyMedium:  TextStyle(color: textPrimary),
+        bodySmall:   TextStyle(color: textSecondary),
+        titleLarge:  TextStyle(color: textPrimary),
+        titleMedium: TextStyle(color: textPrimary),
+        titleSmall:  TextStyle(color: textSecondary),
+        labelLarge:  TextStyle(color: textPrimary),
+        labelMedium: TextStyle(color: textSecondary),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected) ? primary : Colors.grey,
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected) ? primary.withValues(alpha: 0.4) : border,
+        ),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected) ? primary : Colors.transparent,
+        ),
+      ),
+      chipTheme: const ChipThemeData(
+        backgroundColor: surface2,
+        labelStyle: TextStyle(color: textPrimary),
+        side: BorderSide(color: border),
+      ),
+      dropdownMenuTheme: const DropdownMenuThemeData(
+        menuStyle: MenuStyle(backgroundColor: WidgetStatePropertyAll(surface2)),
+      ),
     );
   }
 }

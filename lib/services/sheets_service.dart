@@ -221,6 +221,25 @@ class SheetsService extends ChangeNotifier {
 
   // ── Supprimer une ligne ─────────────────────────────────────────────────
 
+  // ── Effacer une plage ──────────────────────────────────────────────────
+
+  Future<bool> clearRange(String sheetName, String rangeA1) async {
+    try {
+      final url = Uri.parse(
+        '${AppConfig.sheetsProxyUrl}?action=clearRange'
+        '&sheet=${Uri.encodeComponent(sheetName)}'
+        '&range=${Uri.encodeComponent(rangeA1)}',
+      );
+      final response = await http.get(url).timeout(AppConfig.httpTimeout);
+      if (response.statusCode != 200) return false;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return data['success'] == true;
+    } catch (e) {
+      debugPrint('clearRange error ($sheetName!$rangeA1): $e');
+      return false;
+    }
+  }
+
   // ── POST JSON (pour payloads larges) ───────────────────────────────────
 
   Future<Map<String, dynamic>?> postJson(Map<String, dynamic> body) async {

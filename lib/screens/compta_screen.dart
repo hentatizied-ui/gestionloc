@@ -39,7 +39,7 @@ class _ComptaScreenState extends State<ComptaScreen> with SingleTickerProviderSt
           child: TabBar(
             controller: _tab,
             labelColor: AppTheme.primary,
-            unselectedLabelColor: Colors.grey[600],
+            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
             indicatorColor: AppTheme.primary,
             tabs: const [
               Tab(text: 'Récapitulatif'),
@@ -51,7 +51,7 @@ class _ComptaScreenState extends State<ComptaScreen> with SingleTickerProviderSt
       ),
       body: Column(children: [
         Container(
-          color: Colors.grey[50],
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             IconButton(icon: const Icon(Icons.chevron_left, size: 20), onPressed: () => setState(() => _annee--)),
@@ -274,16 +274,16 @@ class _BienIndependantCardState extends State<_BienIndependantCard> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.grey[100],
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.grey[300]!),
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           child: Column(children: [
             Row(children: [
-              Icon(Icons.home_outlined, size: 16, color: Colors.grey[700]),
+              Icon(Icons.home_outlined, size: 16, color: Theme.of(context).colorScheme.onSurface),
               const SizedBox(width: 8),
               Expanded(child: Text(widget.bien.nom,
-                  style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13, color: Colors.grey[800]))),
+                  style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13, color: Theme.of(context).colorScheme.onSurface))),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
@@ -296,7 +296,7 @@ class _BienIndependantCardState extends State<_BienIndependantCard> {
               ),
               const SizedBox(width: 8),
               Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                  color: Colors.grey[600], size: 18),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant, size: 18),
             ]),
             const SizedBox(height: 8),
             Row(children: [
@@ -305,13 +305,13 @@ class _BienIndependantCardState extends State<_BienIndependantCard> {
                 Icon(Icons.arrow_upward, size: 12, color: AppTheme.primary.withOpacity(0.7)),
                 const SizedBox(width: 4),
                 Text('Loyers ${_euro.format(loyer)}',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[700])),
+                    style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface)),
               ])),
               Row(children: [
                 Icon(Icons.arrow_downward, size: 12, color: AppTheme.danger.withOpacity(0.7)),
                 const SizedBox(width: 4),
                 Text('Charges ${_euro.format(charges)}',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[700])),
+                    style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface)),
               ]),
             ]),
           ]),
@@ -456,13 +456,13 @@ class _ChargesCommunesCardState extends State<_ChargesCommunesCard> {
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppTheme.danger)),
               const SizedBox(width: 6),
               Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                  color: Colors.grey, size: 18),
+                  color: Theme.of(context).colorScheme.outlineVariant, size: 18),
             ]),
             if (_expanded) ...[
               const Divider(height: 16),
               if (widget.cfCommunes.isEmpty && widget.charges.isEmpty)
                 Text('Ajoutez des charges communes via Finances → Charges fixes (Taxe) ou Transactions.',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[600]))
+                    style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant))
               else ...[
                 ...widget.cfCommunes.map((cf) => _LigneCommuneRow(
                     cf.label, cf.montantAnnee(widget.annee))),
@@ -524,7 +524,7 @@ class _BienComptaCardState extends State<_BienComptaCard> {
                     color: net >= 0 ? AppTheme.primary : AppTheme.danger)),
               ),
               const SizedBox(width: 6),
-              Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.grey, size: 18),
+              Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Theme.of(context).colorScheme.outlineVariant, size: 18),
             ]),
             if (_expanded) ...[
               const SizedBox(height: 8),
@@ -541,9 +541,9 @@ class _BienComptaCardState extends State<_BienComptaCard> {
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(8)),
                   child: Row(children: [
-                    Expanded(child: _MiniStat2('Prix achat', _euro.format(widget.bien.prixAchat), Colors.grey[600]!)),
+                    Expanded(child: _MiniStat2('Prix achat', _euro.format(widget.bien.prixAchat), Theme.of(context).colorScheme.onSurfaceVariant)),
                     Expanded(child: _MiniStat2('Rdt brut', '${_pct.format(rendBrut)}%', AppTheme.blue)),
                     Expanded(child: _MiniStat2('Rdt net', '${_pct.format(rendNet)}%',
                         rendNet > 0 ? AppTheme.primary : AppTheme.danger)),
@@ -570,7 +570,7 @@ class _LigneCommuneRow extends StatelessWidget {
         Expanded(child: Text(label, style: const TextStyle(fontSize: 11))),
         Text(value == 0 ? '0 €' : '-${_euro.format(value)}',
             style: TextStyle(fontSize: 11,
-                color: value == 0 ? Colors.grey[400] : AppTheme.danger)),
+                color: value == 0 ? Theme.of(context).colorScheme.outlineVariant : AppTheme.danger)),
       ]),
     );
   }
@@ -588,12 +588,12 @@ class _LigneD extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 5),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text(label, style: TextStyle(fontSize: 12,
-            color: isTheo ? Colors.grey[400] : Colors.grey[700],
+            color: isTheo ? Theme.of(context).colorScheme.outlineVariant : Theme.of(context).colorScheme.onSurface,
             fontStyle: isTheo ? FontStyle.italic : FontStyle.normal)),
         Text((isRevenu ? '+' : '-') + _euro.format(value),
             style: TextStyle(fontSize: 12,
                 fontWeight: isTheo ? FontWeight.normal : FontWeight.w500,
-                color: isTheo ? Colors.grey[400] : (isRevenu ? AppTheme.primary : AppTheme.danger))),
+                color: isTheo ? Theme.of(context).colorScheme.outlineVariant : (isRevenu ? AppTheme.primary : AppTheme.danger))),
       ]),
     );
   }
@@ -607,7 +607,7 @@ class _LigneSection extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
-          color: Colors.grey[500], letterSpacing: 0.5)),
+          color: Theme.of(context).colorScheme.onSurfaceVariant, letterSpacing: 0.5)),
     );
   }
 }
@@ -619,7 +619,7 @@ class _MiniStat2 extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(children: [
-      Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+      Text(label, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       const SizedBox(height: 2),
       Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: color)),
     ]);
@@ -681,7 +681,7 @@ class _GraphTab extends StatelessWidget {
                 topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true,
                     getTitlesWidget: (v, _) => Text(moisLabels[v.toInt()],
-                        style: const TextStyle(fontSize: 10, color: Colors.grey)))),
+                        style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)))),
               ),
               gridData: const FlGridData(show: false),
               borderData: FlBorderData(show: false),
@@ -714,7 +714,7 @@ class _GraphTab extends StatelessWidget {
                   const SizedBox(height: 4),
                   ClipRRect(borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(value: pct, minHeight: 6,
-                        backgroundColor: Colors.grey[200],
+                        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                         valueColor: const AlwaysStoppedAnimation(AppTheme.primary))),
                 ]),
               );
@@ -735,7 +735,7 @@ class _Dot extends StatelessWidget {
     return Row(children: [
       Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
       const SizedBox(width: 4),
-      Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+      Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
     ]);
   }
 }
@@ -784,7 +784,7 @@ class _KpiBox extends StatelessWidget {
       decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(12),
           border: Border.all(color: color.withOpacity(0.2))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+        Text(label, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: 4),
         Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: color)),
       ]),
