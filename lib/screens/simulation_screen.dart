@@ -603,7 +603,7 @@ class _SimulationScreenState extends State<SimulationScreen> {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: couleur.withValues(alpha: 0.3)),
           ),
-          child: Column(children: [
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             Text(label, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant), textAlign: TextAlign.center),
             const SizedBox(height: 8),
             Text(affiche, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: couleur)),
@@ -633,11 +633,13 @@ class _SimulationScreenState extends State<SimulationScreen> {
         // ── Rentabilités ─────────────────────────────────────────────────────
         const Text('Rentabilité', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
         const SizedBox(height: 12),
-        Row(children: [
-          kpiRentabilite('Brute', rentBrute, AppTheme.primary),
-          const SizedBox(width: 12),
-          kpiRentabilite('Nette\n(hors emprunt)', rentNette, AppTheme.blue),
-        ]),
+        IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            kpiRentabilite('Brute', rentBrute, AppTheme.primary),
+            const SizedBox(width: 12),
+            kpiRentabilite('Nette (hors emprunt)', rentNette, AppTheme.blue),
+          ]),
+        ),
         const SizedBox(height: 24),
 
         // ── Récapitulatif ────────────────────────────────────────────────────
